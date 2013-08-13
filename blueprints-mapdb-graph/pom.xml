@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <parent>
+        <groupId>com.tinkerpop.blueprints</groupId>
+        <artifactId>blueprints</artifactId>
+        <version>2.5.0-SNAPSHOT</version>
+        <relativePath>../pom.xml</relativePath>
+    </parent>
+    <modelVersion>4.0.0</modelVersion>
+
+    <artifactId>blueprints-mapdb-graph</artifactId>
+    <name>Blueprints-MapDB</name>
+    <description>Blueprints property graph implementation for the MapDB database engine</description>
+    <properties>
+        <javac.src.version>1.6</javac.src.version>
+        <javac.target.version>1.6</javac.target.version>
+        <mapdb.version>0.9.5-SNAPSHOT</mapdb.version>
+    </properties>
+
+    <repositories>
+        <repository>
+            <id>sonatype-nexus-releases</id>
+            <name>Sonatype Nexus Releases</name>
+            <url>https://oss.sonatype.org/content/repositories/releases</url>
+        </repository>
+    </repositories>
+    <dependencies>
+        <dependency>
+            <groupId>com.tinkerpop.blueprints</groupId>
+            <artifactId>blueprints-core</artifactId>
+            <version>${blueprints.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>com.tinkerpop.blueprints</groupId>
+            <artifactId>blueprints-test</artifactId>
+            <version>${blueprints.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.mapdb</groupId>
+            <artifactId>mapdb</artifactId>
+            <version>${mapdb.version}</version>
+        </dependency>
+    </dependencies>
+
+
+</project>

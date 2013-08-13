@@ -274,9 +274,9 @@ public class EdgeTestSuite extends TestSuite {
         assertEquals(0, count(v3.getEdges(Direction.OUT)));
 
         if (!graph.getFeatures().ignoresSuppliedIds) {
-            v1 = graph.getVertex(graphTest.convertId("1"));
-            v2 = graph.getVertex(graphTest.convertId("2"));
-            v3 = graph.getVertex(graphTest.convertId("3"));
+            v1 = graph.getVertex(v1.getId());
+            v2 = graph.getVertex(v2.getId());
+            v3 = graph.getVertex(v3.getId());
 
             assertEquals(0, count(v1.getEdges(Direction.IN)));
             assertEquals(1, count(v1.getEdges(Direction.OUT)));
@@ -328,9 +328,9 @@ public class EdgeTestSuite extends TestSuite {
         assertEquals(0, count(v2.getEdges(Direction.IN)));
         assertEquals(2, count(v3.getEdges(Direction.IN)));
         if (!graph.getFeatures().ignoresSuppliedIds) {
-            v1 = graph.getVertex(graphTest.convertId("1"));
-            v2 = graph.getVertex(graphTest.convertId("2"));
-            v3 = graph.getVertex(graphTest.convertId("3"));
+            v1 = graph.getVertex(v1.getId());
+            v2 = graph.getVertex(v2.getId());
+            v3 = graph.getVertex(v3.getId());
         }
         assertEquals(0, count(v1.getEdges(Direction.OUT)));
         assertEquals(2, count(v2.getEdges(Direction.OUT)));
@@ -347,9 +347,9 @@ public class EdgeTestSuite extends TestSuite {
         assertEquals(0, count(v2.getEdges(Direction.IN)));
         assertEquals(1, count(v3.getEdges(Direction.IN)));
         if (!graph.getFeatures().ignoresSuppliedIds) {
-            v1 = graph.getVertex(graphTest.convertId("1"));
-            v2 = graph.getVertex(graphTest.convertId("2"));
-            v3 = graph.getVertex(graphTest.convertId("3"));
+            v1 = graph.getVertex(v1.getId());
+            v2 = graph.getVertex(v2.getId());
+            v3 = graph.getVertex(v3.getId());
         }
         assertEquals(0, count(v1.getEdges(Direction.OUT)));
         assertEquals(1, count(v2.getEdges(Direction.OUT)));
@@ -366,9 +366,9 @@ public class EdgeTestSuite extends TestSuite {
         assertEquals(0, count(v2.getEdges(Direction.IN)));
         assertEquals(0, count(v3.getEdges(Direction.IN)));
         if (!graph.getFeatures().ignoresSuppliedIds) {
-            v1 = graph.getVertex(graphTest.convertId("1"));
-            v2 = graph.getVertex(graphTest.convertId("2"));
-            v3 = graph.getVertex(graphTest.convertId("3"));
+            v1 = graph.getVertex(v1.getId());
+            v2 = graph.getVertex(v2.getId());
+            v3 = graph.getVertex(v3.getId());
         }
         assertEquals(0, count(v1.getEdges(Direction.OUT)));
         assertEquals(0, count(v2.getEdges(Direction.OUT)));
