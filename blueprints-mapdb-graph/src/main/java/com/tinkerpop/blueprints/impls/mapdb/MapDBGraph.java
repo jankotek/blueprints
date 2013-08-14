@@ -1,10 +1,7 @@
 package com.tinkerpop.blueprints.impls.mapdb;
 
 import com.tinkerpop.blueprints.*;
-import com.tinkerpop.blueprints.util.DefaultGraphQuery;
-import com.tinkerpop.blueprints.util.DefaultVertexQuery;
-import com.tinkerpop.blueprints.util.ExceptionFactory;
-import com.tinkerpop.blueprints.util.VerticesFromEdgesIterable;
+import com.tinkerpop.blueprints.util.*;
 import org.mapdb.*;
 
 import java.io.DataInput;
@@ -16,7 +13,7 @@ import java.util.*;
 /**
  * MapDB graph API
  */
-public class MapDBGraph implements Graph {
+public class MapDBGraph implements IndexableGraph,KeyIndexableGraph {
 
     protected final DB db;
     protected final Engine engine;
@@ -24,80 +21,35 @@ public class MapDBGraph implements Graph {
     protected final Set<Long> vertices;
     protected final Set<Long> edges;
 
-    protected final NavigableMap<Fun.Tuple2<Long,String>,Object> props;
+    protected final NavigableMap<Fun.Tuple2<Long,String>,Object> verticesProps;
+    protected final NavigableMap<Fun.Tuple2<Long,String>,Object> edgesProps;
+
+    protected final NavigableSet<Fun.Tuple3<String,Object,Long>> verticesIndex;
+    protected final NavigableSet<Fun.Tuple3<String,Object,Long>> edgesIndex;
+
+    protected final NavigableSet<Fun.Tuple4<String,String,Object,Long>> verticesIndex2;
+    protected final NavigableSet<Fun.Tuple4<String,String,Object,Long>> edgesIndex2;
+
+    protected final Set<String> verticesKeys;
+    protected final Set<String> edgesKeys;
+
+    protected final Set<String> verticesKeys2;
+    protected final Set<String> edgesKeys2;
+
 
     /** key:vertice recid, direction (out=true), edge label, edge recid*/
     protected final NavigableSet<Fun.Tuple4<Long,Boolean,String,Long>> edges4vertice;
 
-    public class MElement implements  Element{
+    protected final File directory;
+
+
+    public class MVertex implements Vertex{
+
 
         protected final Long id;
 
-        public MElement(Long id) {
-            this.id = id;
-        }
-
-        @Override
-        public <T> T getProperty(String key) {
-            return (T) props.get(Fun.t2(id, key));
-        }
-
-        @Override
-        public Set<String> getPropertyKeys() {
-            Set<String> ret = new HashSet<String>();
-            for(String s:Bind.findSecondaryKeys(props.navigableKeySet(),id)){
-                ret.add(s);
-            }
-            return ret;
-        }
-
-        @Override
-        public void setProperty(String key, Object value) {
-            if(key==null||"".equals(key)||"id".equals(key)
-                    ||"label".equals(key)) throw new IllegalArgumentException();
-            props.put(Fun.t2(id,key),value);
-        }
-
-        @Override
-        public <T> T removeProperty(String key) {
-            return (T) props.remove(Fun.t2(id, key));
-        }
-
-
-
-        @Override
-        public void remove() {
-            ((NavigableMap)props).subMap(Fun.t2(id,null),Fun.t2(id,Fun.HI())).clear();
-        }
-
-        @Override
-        public Object getId() {
-            return id;
-        }
-
-        @Override
-        public boolean equals(Object o) {
-            if (this == o) return true;
-            if (!(o instanceof MElement)) return false;
-
-            MElement mElement = (MElement) o;
-
-            if (id != null ? !id.equals(mElement.id) : mElement.id != null) return false;
-
-            return true;
-        }
-
-        @Override
-        public int hashCode() {
-            return id != null ? id.hashCode() : 0;
-        }
-    }
-
-    public class MVertex extends MElement implements Vertex{
-
-
         public MVertex(Long id) {
-            super(id);
+            this.id = id;
         }
 
         @Override
@@ -141,7 +93,28 @@ public class MapDBGraph implements Graph {
 
         @Override
         public void remove() {
-            super.remove();
+            if(!vertices.contains(id)) throw new IllegalStateException("vertex not found");
+
+            Iterator<Map.Entry<Fun.Tuple2<Long,String>,Object>> propsIter =
+                    ((NavigableMap)verticesProps).subMap(Fun.t2(id,null),Fun.t2(id,Fun.HI())).entrySet().iterator();
+
+            while(propsIter.hasNext()){
+                Map.Entry<Fun.Tuple2<Long,String>,Object> n = propsIter.next();
+                if(verticesKeys.contains(n.getKey().b)){
+                    verticesIndex.remove(Fun.t3(n.getKey().b,n.getValue(),n.getKey().a));
+                }
+                propsIter.remove();
+            }
+
+
+            //remove all relevant recids from indexes
+            //TODO linear scan, add reverse index
+            Iterator<Fun.Tuple4<String,String,Object,Long>> indexIter = verticesIndex2.iterator();
+            while(indexIter.hasNext()){
+                if(indexIter.next().d.equals(id))
+                    indexIter.remove();
+            }
+
             engine.delete(id,VERTEX_SERIALIZER);
             vertices.remove(id);
 
@@ -149,6 +122,53 @@ public class MapDBGraph implements Graph {
             for(Edge e:getEdges(Direction.OUT))e.remove();
             for(Edge e:getEdges(Direction.IN))e.remove();
 
+        }
+
+        @Override
+        public <T> T getProperty(String key) {
+            return (T) verticesProps.get(Fun.t2(id, key));
+        }
+
+        @Override
+        public Set<String> getPropertyKeys() {
+            Set<String> ret = new HashSet<String>();
+            for(String s:Bind.findVals2(verticesProps.navigableKeySet(), id)){
+                ret.add(s);
+            }
+            return ret;
+        }
+
+        @Override
+        public void setProperty(String key, Object value) {
+            if(key==null||"".equals(key)||"id".equals(key)
+                    ||"label".equals(key)) throw new IllegalArgumentException();
+            Object oldVal = verticesProps.put(Fun.t2(id,key),value);
+
+            if(verticesKeys.contains(key)){
+                //remove old value from index if exists
+                if(oldVal!=null) verticesIndex.remove(Fun.t3(key,oldVal,id));
+                //put new value
+                verticesIndex.add(Fun.t3(key,value,id));
+            }
+        }
+
+        @Override
+        public <T> T removeProperty(String key) {
+            T ret = (T) verticesProps.remove(Fun.t2(id, key));
+            if(verticesKeys.contains(key)){
+                //remove from index
+                //remove old value from index if exists
+                if(ret!=null) verticesIndex.remove(Fun.t3(key,ret,id));
+            }
+
+            return ret;
+        }
+
+
+
+        @Override
+        public Object getId() {
+            return id;
         }
 
     }
@@ -167,14 +187,15 @@ public class MapDBGraph implements Graph {
         }
     };
 
-    protected class MEdge extends MElement implements Edge{
+    protected class MEdge implements Edge{
 
+        protected final Long id;
         protected final long in,out;
         protected final String label;
 
 
         public MEdge(Long id, long out, long in,String label) {
-            super(id);
+            this.id = id;
             this.out = out;
             this.in = in;
             if(label==null && id!=null) throw new IllegalArgumentException();
@@ -200,12 +221,82 @@ public class MapDBGraph implements Graph {
 
         @Override
         public void remove() {
-            super.remove();
+            if(!edges.contains(id)) throw new IllegalStateException("edge not found");
+
+            Iterator<Map.Entry<Fun.Tuple2<Long,String>,Object>> propsIter =
+                    ((NavigableMap)edgesProps).subMap(Fun.t2(id,null),Fun.t2(id,Fun.HI())).entrySet().iterator();
+
+            while(propsIter.hasNext()){
+                Map.Entry<Fun.Tuple2<Long,String>,Object> n = propsIter.next();
+                if(edgesKeys.contains(n.getKey().b)){
+                    edgesIndex.remove(Fun.t3(n.getKey().b,n.getValue(),n.getKey().a));
+                }
+                propsIter.remove();
+            }
+
+
+            //remove all relevant recids from indexes
+            //TODO linear scan, add reverse index
+            Iterator<Fun.Tuple4<String,String,Object,Long>> indexIter = edgesIndex2.iterator();
+            while(indexIter.hasNext()){
+                if(indexIter.next().d.equals(id))
+                    indexIter.remove();
+            }
+
             engine.delete(id,EDGE_SERIALIZER);
             edges.remove(id);
             edges4vertice.remove(Fun.t4(out,true,label,id));
             edges4vertice.remove(Fun.t4(in,false,label,id));
         }
+
+
+        @Override
+        public <T> T getProperty(String key) {
+            return (T) edgesProps.get(Fun.t2(id, key));
+        }
+
+        @Override
+        public Set<String> getPropertyKeys() {
+            Set<String> ret = new HashSet<String>();
+            for(String s:Bind.findVals2(edgesProps.navigableKeySet(),id)){
+                ret.add(s);
+            }
+            return ret;
+        }
+
+        @Override
+        public void setProperty(String key, Object value) {
+            if(key==null||"".equals(key)||"id".equals(key)
+                    ||"label".equals(key)) throw new IllegalArgumentException();
+            Object oldVal = edgesProps.put(Fun.t2(id,key),value);
+
+            if(edgesKeys.contains(key)){
+                //remove old value from index if exists
+                if(oldVal!=null) edgesIndex.remove(Fun.t3(key,oldVal,id));
+                //put new value
+                edgesIndex.add(Fun.t3(key,value,id));
+            }
+        }
+
+        @Override
+        public <T> T removeProperty(String key) {
+            T ret = (T) edgesProps.remove(Fun.t2(id, key));
+            if(edgesKeys.contains(key)){
+                //remove from index
+                //remove old value from index if exists
+                if(ret!=null) edgesIndex.remove(Fun.t3(key,ret,id));
+            }
+
+            return ret;
+        }
+
+
+
+        @Override
+        public Object getId() {
+            return id;
+        }
+
     }
 
     protected final Serializer<MEdge> EDGE_SERIALIZER = new Serializer<MEdge>() {
@@ -228,31 +319,77 @@ public class MapDBGraph implements Graph {
     protected final MEdge EDGE_EMPTY = new MEdge(null,0L,0L,null);
 
     public MapDBGraph(String fileName) {
-        File f = new File(fileName);
-        f.getParentFile().mkdirs();
-        db = DBMaker.newFileDB(f)
+        directory = new File(fileName);
+        directory.getParentFile().mkdirs();
+        db = DBMaker.newFileDB(directory)
                 .asyncWriteDisable()
-                .transactionDisable()
+                //.transactionDisable()
                 .make();
         engine = db.getEngine();
 
-        vertices = db
+        vertices =
+                db
                 .createTreeSet("vertices")
-                .makeLongSet();
+                .keepCounter(true)
+                .serializer(BTreeKeySerializer.ZERO_OR_POSITIVE_LONG)
+                .makeOrGet();
+
 
         edges = db
                 .createTreeSet("edges")
-                .makeLongSet();
+                .keepCounter(true)
+                .serializer(BTreeKeySerializer.ZERO_OR_POSITIVE_LONG)
+                .makeOrGet();
 
         edges4vertice = db
                 .createTreeSet("edges4vertice")
                 .serializer(BTreeKeySerializer.TUPLE4)
-                .make();
+                .makeOrGet();
 
-        props = db.createTreeMap("props")
+        edgesProps = db.createTreeMap("edgesProps")
                 .keySerializer(BTreeKeySerializer.TUPLE2)
                 .valuesStoredOutsideNodes(true)
-                .make();
+                .makeOrGet();
+
+        verticesProps = db.createTreeMap("verticesProps")
+                .keySerializer(BTreeKeySerializer.TUPLE2)
+                .valuesStoredOutsideNodes(true)
+                .makeOrGet();
+
+
+        verticesIndex = db.createTreeSet("verticesIndex")
+                .serializer(BTreeKeySerializer.TUPLE3)
+                .makeOrGet();
+
+        edgesIndex = db.createTreeSet("edgesIndex")
+                .serializer(BTreeKeySerializer.TUPLE3)
+                .makeOrGet();
+
+        verticesKeys = db.createTreeSet("verticesKeys")
+                .serializer(BTreeKeySerializer.STRING)
+                .makeOrGet();
+
+        edgesKeys = db.createTreeSet("edgesKeys")
+                .serializer(BTreeKeySerializer.STRING)
+                .makeOrGet();
+
+
+        verticesIndex2 = db.createTreeSet("verticesIndex2")
+                .serializer(BTreeKeySerializer.TUPLE4)
+                .makeOrGet();
+
+        edgesIndex2 = db.createTreeSet("edgesIndex2")
+                .serializer(BTreeKeySerializer.TUPLE4)
+                .makeOrGet();
+
+        verticesKeys2 = db.createTreeSet("verticesKeys2")
+                .serializer(BTreeKeySerializer.STRING)
+                .makeOrGet();
+
+        edgesKeys2 = db.createTreeSet("edgesKeys2")
+                .serializer(BTreeKeySerializer.STRING)
+                .makeOrGet();
+
     }
 
     protected final MVertex VERTEX_EMPTY = new MVertex(null);
@@ -272,6 +409,12 @@ public class MapDBGraph implements Graph {
     @Override
     public Vertex getVertex(Object id) {
         if(id==null) throw new IllegalArgumentException();
+        if(id instanceof String)try{
+            id = Long.valueOf((String)id);
+        }catch(NumberFormatException e){
+            return null;
+        }
+
         if(!vertices.contains(id))return null;
         return engine.get((Long)id, VERTEX_SERIALIZER);
     }
@@ -285,32 +428,42 @@ public class MapDBGraph implements Graph {
     public Iterable<Vertex> getVertices() {
         return new Iterable<Vertex>() {
 
-            Iterator<Long> vertIter = vertices.iterator();
             @Override
             public Iterator<Vertex> iterator() {
-                return new Iterator<Vertex>() {
-                    @Override
-                    public boolean hasNext() {
-                        return vertIter.hasNext();
-                    }
-
-                    @Override
-                    public Vertex next() {
-                        return engine.get(vertIter.next(),VERTEX_SERIALIZER);
-                    }
-
-                    @Override
-                    public void remove() {
-                        throw new UnsupportedOperationException();
-                    }
-                };
+                final Iterator<Long> vertIter = vertices.iterator();
+                return new MVertexRecidIterator(vertIter);
             }
         };
     }
 
     @Override
-    public Iterable<Vertex> getVertices(String key, Object value) {
-        throw new UnsupportedOperationException(); //TODO filter props
+    public Iterable<Vertex> getVertices(final String key, final Object value) {
+
+        return new Iterable<Vertex>() {
+            @Override
+            public Iterator<Vertex> iterator() {
+
+                boolean indexed = verticesKeys.contains(key);
+
+                Set<Long> longs=null;
+
+                if(!indexed){
+                    //traverse all
+                    longs = new HashSet<Long>();
+                    for(Map.Entry<Fun.Tuple2<Long,String>,Object> e:verticesProps.entrySet()){
+                        if(e.getKey().b.equals(key)&& e.getValue().equals(value))
+                            longs.add(e.getKey().a);
+                    }
+                }
+
+                final Iterator<Long> i = indexed?
+                        Bind.findVals3(verticesIndex,key,value).iterator():longs.iterator();
+
+
+                return new MVertexRecidIterator(i);
+            }
+        };
+
     }
 
     @Override
@@ -327,6 +480,12 @@ public class MapDBGraph implements Graph {
     @Override
     public Edge getEdge(Object id) {
         if(id==null) throw new IllegalArgumentException();
+        if(id instanceof String)try{
+            id = Long.valueOf((String)id);
+        }catch(NumberFormatException e){
+            return null;
+        }
+
         if(!edges.contains(id))return null;
         return engine.get((Long) id,EDGE_SERIALIZER);
     }
@@ -336,37 +495,90 @@ public class MapDBGraph implements Graph {
         edge.remove();
     }
 
+
+    public class MVertexRecidIterator implements Iterator<Vertex>{
+        protected final Iterator<Long> i;
+
+        public MVertexRecidIterator(Iterator<Long> i) {
+            this.i = i;
+        }
+
+        @Override
+        public boolean hasNext() {
+            return i.hasNext();
+        }
+
+        @Override
+        public Vertex next() {
+            return engine.get(i.next(), VERTEX_SERIALIZER);
+        }
+
+        @Override
+        public void remove() {
+            i.remove();
+        }
+    }
+
+    public class MEdgeRecidIterator implements Iterator<Edge>{
+        protected final Iterator<Long> i;
+
+        public MEdgeRecidIterator(Iterator<Long> i) {
+            this.i = i;
+        }
+
+        @Override
+        public boolean hasNext() {
+            return i.hasNext();
+        }
+
+        @Override
+        public Edge next() {
+            return engine.get(i.next(),EDGE_SERIALIZER);
+        }
+
+        @Override
+        public void remove() {
+            i.remove();
+        }
+    }
+
     @Override
     public Iterable<Edge> getEdges() {
         return new Iterable<Edge>() {
 
-            Iterator<Long> edgeIter = edges.iterator();
             @Override
             public Iterator<Edge> iterator() {
-                return new Iterator<Edge>() {
-                    @Override
-                    public boolean hasNext() {
-                        return edgeIter.hasNext();
-                    }
-
-                    @Override
-                    public Edge next() {
-                        return engine.get(edgeIter.next(),EDGE_SERIALIZER);
-                    }
-
-                    @Override
-                    public void remove() {
-                        throw new UnsupportedOperationException();
-                    }
-                };
+                return new MEdgeRecidIterator(edges.iterator());
             }
         };
-
     }
 
     @Override
-    public Iterable<Edge> getEdges(String key, Object value) {
-        throw new UnsupportedOperationException(); //TODO filter props
+    public Iterable<Edge> getEdges(final String key, final Object value) {
+
+        return new Iterable<Edge>() {
+            @Override
+            public Iterator<Edge> iterator() {
+
+                boolean indexed = edgesKeys.contains(key);
+
+                Set<Long> longs=null;
+
+                if(!indexed){
+                    //traverse all
+                    longs = new HashSet<Long>();
+                    for(Map.Entry<Fun.Tuple2<Long,String>,Object> e:edgesProps.entrySet()){
+                        if(e.getKey().b.equals(key)&& e.getValue().equals(value))
+                            longs.add(e.getKey().a);
+                    }
+                }
+
+                 Iterator<Long> i= indexed?
+                        Bind.findVals3(edgesIndex,key,value).iterator():longs.iterator();
+
+                return new MEdgeRecidIterator(i);
+            }
+        };
     }
 
     @Override
@@ -376,6 +588,8 @@ public class MapDBGraph implements Graph {
 
     @Override
     public void shutdown() {
+        if(db.isClosed()) return;
+        db.commit();
         db.close();
     }
 
@@ -416,5 +630,148 @@ public class MapDBGraph implements Graph {
         return f;
 
     }
+
+    @Override
+    public <T extends Element> void dropKeyIndex(String key, Class<T> elementClass) {
+        boolean isVertex = Vertex.class.isAssignableFrom(elementClass);
+        (isVertex?verticesKeys:edgesKeys).remove(key);
+        Fun.Tuple3 lo = Fun.t3(key, null, null);
+        Fun.Tuple3 hi = Fun.t3(key,Fun.HI(),Fun.HI());
+        (isVertex?verticesIndex:edgesIndex).subSet(lo, hi).clear();
+    }
+
+    @Override
+    public <T extends Element> void createKeyIndex(String key, Class<T> elementClass, Parameter... indexParameters) {
+        boolean isVertex = Vertex.class.isAssignableFrom(elementClass);
+
+
+        for(Map.Entry<Fun.Tuple2<Long,String>,Object> e:(isVertex?verticesProps:edgesProps).entrySet()){
+            if(e.getKey().b.equals(key)){
+                (isVertex?verticesIndex:edgesIndex).add(Fun.t3(key,e.getValue(),e.getKey().a));
+            }
+        }
+
+        (isVertex?verticesKeys:edgesKeys).add(key);
+
+
+
+    }
+
+    @Override
+    public <T extends Element> Set<String> getIndexedKeys(Class<T> elementClass) {
+        boolean isVertex = Vertex.class.isAssignableFrom(elementClass);
+        return new HashSet<String>(isVertex?verticesKeys:edgesKeys);
+    }
+
+    public class MIndex<T extends Element> implements Index<T>{
+
+        protected final String indexName;
+        protected final boolean isVertex;
+
+        public MIndex(String indexName, boolean vertex) {
+            this.indexName = indexName;
+            isVertex = vertex;
+        }
+
+        @Override
+        public String getIndexName() {
+            return indexName;
+        }
+
+        @Override
+        public Class<T> getIndexClass() {
+            return (Class<T>) (isVertex?Vertex.class:Edge.class);
+        }
+
+        @Override
+        public void put(String key, Object value, T element) {
+            Long recid = (Long) element.getId();
+            Fun.Tuple4 t = Fun.t4(indexName,key,value,recid);
+            //TODO remove old value?
+            (isVertex?verticesIndex2:edgesIndex2).add(t);
+        }
+
+        @Override
+        public CloseableIterable<T> get(final String key, final Object value) {
+            return new CloseableIterable<T>() {
+                @Override
+                public void close() {
+                }
+
+                @Override
+                public Iterator<T> iterator() {
+                    Iterator<Long> iter = Bind.findVals4(isVertex?verticesIndex2:edgesIndex2,indexName,key,value).iterator();
+                    return (Iterator<T>) (isVertex?new MVertexRecidIterator(iter):new MEdgeRecidIterator(iter));
+                }
+            };
+        }
+
+        @Override
+        public CloseableIterable<T> query(String key, Object query) {
+            throw new UnsupportedOperationException();
+        }
+
+        @Override
+        public long count(String key, Object value) {
+            Iterator iter=get(key,value).iterator();
+            long counter=0;
+            while(iter.hasNext()){
+                counter++;
+                iter.next();
+            }
+            return counter;
+        }
+
+        @Override
+        public void remove(String key, Object value, T element) {
+            Long recid = (Long) element.getId();
+            (isVertex?verticesIndex2:edgesIndex2).remove(Fun.t4(indexName, key, value, recid));
+        }
+    }
+
+    @Override
+    public <T extends Element> Index<T> createIndex(String indexName, Class<T> indexClass, Parameter... indexParameters) {
+        if(verticesKeys2.contains(indexName)||edgesKeys2.contains(indexName))
+            throw new IllegalArgumentException("Index already exists");
+        boolean isVertex = Vertex.class.isAssignableFrom(indexClass);
+
+        (isVertex?verticesKeys2:edgesKeys2).add(indexName);
+
+        return new MIndex<T>(indexName,isVertex);
+    }
+
+    @Override
+    public <T extends Element> Index<T> getIndex(String indexName, Class<T> indexClass) {
+        boolean isVertex = Vertex.class.isAssignableFrom(indexClass);
+        if(!(isVertex?verticesKeys2:edgesKeys2).contains(indexName)) return null;
+        return new MIndex<T>(indexName,isVertex);
+    }
+
+    @Override
+    public Iterable<Index<? extends Element>> getIndices() {
+        List ret = new ArrayList();
+        for(String s:verticesKeys2) ret.add(new MIndex(s,true));
+        for(String s:edgesKeys2) ret.add(new MIndex(s,false));
+        return ret;
+    }
+
+    @Override
+    public void dropIndex(String indexName) {
+        //TODO what if there is collision in name on vertex/edge index?
+        verticesKeys2.remove(indexName);
+        edgesKeys2.remove(indexName);
+
+        Fun.Tuple4 lo = Fun.t4(indexName,null,null,null);
+        Fun.Tuple4 hi = Fun.t4(indexName,Fun.HI,Fun.HI,Fun.HI);
+        verticesIndex2.subSet(lo,hi).clear();
+        edgesIndex2.subSet(lo,hi).clear();
+    }
+
+    public String toString() {
+       boolean up = !db.isClosed();
+       return StringFactory.graphString(this, "vertices:" + (up?this.vertices.size():"CLOSED") + " edges:" +
+               (up?this.edges.size():"CLOSED") + " directory:" + this.directory);
+    }
+
 
 }

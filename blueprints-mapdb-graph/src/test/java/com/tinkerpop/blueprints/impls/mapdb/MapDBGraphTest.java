@@ -152,33 +152,9 @@ public class MapDBGraphTest extends GraphTest {
     }
 
 
-    public void testClear() {
-        deleteDirectory(new File(getDirectory()));
-        TinkerGraph graph = (TinkerGraph) this.generateGraph();
-        this.stopWatch();
-        for (int i = 0; i < 25; i++) {
-            Vertex a = graph.addVertex(null);
-            Vertex b = graph.addVertex(null);
-            graph.addEdge(null, a, b, "knows");
-        }
-        printPerformance(graph.toString(), 75, "elements added", this.stopWatch());
-
-        assertEquals(50, count(graph.getVertices()));
-        assertEquals(25, count(graph.getEdges()));
-
-        this.stopWatch();
-        graph.clear();
-        printPerformance(graph.toString(), 75, "elements deleted", this.stopWatch());
-
-        assertEquals(0, count(graph.getVertices()));
-        assertEquals(0, count(graph.getEdges()));
-
-        graph.shutdown();
-    }
-
     public void testShutdownStartManyTimes() {
         deleteDirectory(new File(getDirectory()));
-        TinkerGraph graph = (TinkerGraph) this.generateGraph();
+        MapDBGraph graph = (MapDBGraph) this.generateGraph();
         for (int i = 0; i < 25; i++) {
             Vertex a = graph.addVertex(null);
             a.setProperty("name", "a" + UUID.randomUUID());
@@ -190,7 +166,7 @@ public class MapDBGraphTest extends GraphTest {
         this.stopWatch();
         int iterations = 150;
         for (int i = 0; i < iterations; i++) {
-            graph = (TinkerGraph) this.generateGraph();
+            graph = (MapDBGraph) this.generateGraph();
             assertEquals(50, count(graph.getVertices()));
             for (final Vertex v : graph.getVertices()) {
                 assertTrue(v.getProperty("name").toString().startsWith("a") || v.getProperty("name").toString().startsWith("b"));
