@@ -2,6 +2,8 @@ package com.tinkerpop.blueprints.impls.mapdb;
 
 import com.tinkerpop.blueprints.*;
 import com.tinkerpop.blueprints.util.*;
+import org.apache.commons.configuration.BaseConfiguration;
+import org.apache.commons.configuration.Configuration;
 import org.mapdb.*;
 
 import java.io.DataInput;
@@ -171,6 +173,11 @@ public class MapDBGraph implements IndexableGraph,KeyIndexableGraph {
             return id;
         }
 
+        @Override
+        public String toString() {
+            return StringFactory.vertexString(this);
+        }
+
     }
 
     protected final Serializer<MVertex> VERTEX_SERIALIZER = new Serializer<MVertex>() {
@@ -297,6 +304,11 @@ public class MapDBGraph implements IndexableGraph,KeyIndexableGraph {
             return id;
         }
 
+        @Override
+        public String toString() {
+            return StringFactory.edgeString(this);
+        }
+
     }
 
     protected final Serializer<MEdge> EDGE_SERIALIZER = new Serializer<MEdge>() {
@@ -318,7 +330,24 @@ public class MapDBGraph implements IndexableGraph,KeyIndexableGraph {
 
     protected final MEdge EDGE_EMPTY = new MEdge(null,0L,0L,null);
 
+    public static Graph open(Configuration configuration) {
+        return new MapDBGraph(configuration);
+    }
+
+    private static Configuration baseConfiguration(String fileName) {
+        BaseConfiguration configuration = new BaseConfiguration();
+        configuration.setProperty("blueprints.mapdb.file", fileName);
+        return configuration;
+    }
+
     public MapDBGraph(String fileName) {
+        this(baseConfiguration(fileName));
+    }
+
+    public MapDBGraph(Configuration configuration) {
+        // Retrieve properties
+        String fileName = configuration.getString("blueprints.mapdb.file", "./graph.db");
+        // Build DB
         directory = new File(fileName);
         directory.getParentFile().mkdirs();
         db = DBMaker.newFileDB(directory)
