@@ -633,6 +633,7 @@ public class MapDBGraph implements IndexableGraph,KeyIndexableGraph {
 
     @Override
     public <T extends Element> void dropKeyIndex(String key, Class<T> elementClass) {
+        if(elementClass ==null) throw new IllegalArgumentException();
         boolean isVertex = Vertex.class.isAssignableFrom(elementClass);
         (isVertex?verticesKeys:edgesKeys).remove(key);
         Fun.Tuple3 lo = Fun.t3(key, null, null);
@@ -642,8 +643,9 @@ public class MapDBGraph implements IndexableGraph,KeyIndexableGraph {
 
     @Override
     public <T extends Element> void createKeyIndex(String key, Class<T> elementClass, Parameter... indexParameters) {
-        boolean isVertex = Vertex.class.isAssignableFrom(elementClass);
+        if(elementClass ==null) throw new IllegalArgumentException();
 
+        boolean isVertex = Vertex.class.isAssignableFrom(elementClass);
 
         for(Map.Entry<Fun.Tuple2<Long,String>,Object> e:(isVertex?verticesProps:edgesProps).entrySet()){
             if(e.getKey().b.equals(key)){
@@ -659,6 +661,7 @@ public class MapDBGraph implements IndexableGraph,KeyIndexableGraph {
 
     @Override
     public <T extends Element> Set<String> getIndexedKeys(Class<T> elementClass) {
+        if(elementClass ==null) throw new IllegalArgumentException();
         boolean isVertex = Vertex.class.isAssignableFrom(elementClass);
         return new HashSet<String>(isVertex?verticesKeys:edgesKeys);
     }
