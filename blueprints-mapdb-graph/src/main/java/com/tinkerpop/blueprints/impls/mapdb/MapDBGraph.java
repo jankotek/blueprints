@@ -171,6 +171,11 @@ public class MapDBGraph implements IndexableGraph,KeyIndexableGraph {
             return id;
         }
 
+        @Override
+        public String toString() {
+            return StringFactory.vertexString(this);
+        }
+
     }
 
     protected final Serializer<MVertex> VERTEX_SERIALIZER = new Serializer<MVertex>() {
@@ -295,6 +300,11 @@ public class MapDBGraph implements IndexableGraph,KeyIndexableGraph {
         @Override
         public Object getId() {
             return id;
+        }
+
+        @Override
+        public String toString() {
+            return StringFactory.edgeString(this);
         }
 
     }
