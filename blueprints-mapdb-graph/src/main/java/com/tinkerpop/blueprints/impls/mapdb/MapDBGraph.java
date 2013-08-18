@@ -18,8 +18,14 @@ public class MapDBGraph implements IndexableGraph,KeyIndexableGraph {
     protected final DB db;
     protected final Engine engine;
 
+    protected final boolean useUserIds;
+
     protected final Set<Long> vertices;
     protected final Set<Long> edges;
+
+    protected final Map<Object,Long> vertices2recid;
+    protected final Map<Object,Long> edges2recid;
+
 
     protected final NavigableMap<Fun.Tuple2<Long,String>,Object> verticesProps;
     protected final NavigableMap<Fun.Tuple2<Long,String>,Object> edgesProps;
@@ -37,18 +43,16 @@ public class MapDBGraph implements IndexableGraph,KeyIndexableGraph {
     protected final Set<String> edgesKeys2;
 
 
-    /** key:vertice recid, direction (out=true), edge label, edge recid*/
+    /** key:vertice id, direction (out=true), edge label, edge id*/
     protected final NavigableSet<Fun.Tuple4<Long,Boolean,String,Long>> edges4vertice;
-
-    protected final File directory;
 
 
     public class MVertex implements Vertex{
 
 
-        protected final Long id;
+        protected final Object id;
 
-        public MVertex(Long id) {
+        public MVertex(Object id) {
             this.id = id;
         }
 
@@ -56,18 +60,20 @@ public class MapDBGraph implements IndexableGraph,KeyIndexableGraph {
         public Iterable<Edge> getEdges(Direction direction, String... labels) {
             List<Edge> ret = new ArrayList<Edge>();
             if(labels==null || labels.length==0) labels = new String[]{null};
+            Long recid = vertexRecid(id);
+            assert(recid!=null);
             for(String label:labels){
 
                 if(Direction.BOTH == direction){
-                    for(Long recid : Bind.findVals4( edges4vertice, id, true, label)){
-                        ret.add(engine.get(recid,EDGE_SERIALIZER));
+                    for(Long recid2 : Bind.findVals4( edges4vertice, recid, true, label)){
+                        ret.add(engine.get(recid2,EDGE_SERIALIZER));
                     }
-                    for(Long recid : Bind.findVals4( edges4vertice, id, false, label)){
-                        ret.add(engine.get(recid,EDGE_SERIALIZER));
+                    for(Long recid2 : Bind.findVals4( edges4vertice, recid, false, label)){
+                        ret.add(engine.get(recid2,EDGE_SERIALIZER));
                     }
                 }else{
-                    for(Long recid : Bind.findVals4( edges4vertice, id, direction == Direction.OUT, label)){
-                        ret.add(engine.get(recid,EDGE_SERIALIZER));
+                    for(Long recid2 : Bind.findVals4( edges4vertice, recid, direction == Direction.OUT, label)){
+                        ret.add(engine.get(recid2,EDGE_SERIALIZER));
                     }
                 }
             }
@@ -93,7 +99,8 @@ public class MapDBGraph implements IndexableGraph,KeyIndexableGraph {
 
         @Override
         public void remove() {
-            if(!vertices.contains(id)) throw new IllegalStateException("vertex not found");
+            Long recid = vertexRecid(id);
+            if(!vertices.contains(recid)) throw new IllegalStateException("vertex not found");
 
             Iterator<Map.Entry<Fun.Tuple2<Long,String>,Object>> propsIter =
                     ((NavigableMap)verticesProps).subMap(Fun.t2(id,null),Fun.t2(id,Fun.HI())).entrySet().iterator();
@@ -115,8 +122,8 @@ public class MapDBGraph implements IndexableGraph,KeyIndexableGraph {
                     indexIter.remove();
             }
 
-            engine.delete(id,VERTEX_SERIALIZER);
-            vertices.remove(id);
+            engine.delete(recid,VERTEX_SERIALIZER);
+            vertices.remove(recid);
 
             //remove related edges
             for(Edge e:getEdges(Direction.OUT))e.remove();
@@ -126,13 +133,14 @@ public class MapDBGraph implements IndexableGraph,KeyIndexableGraph {
 
         @Override
         public <T> T getProperty(String key) {
-            return (T) verticesProps.get(Fun.t2(id, key));
+            return (T) verticesProps.get(Fun.t2(vertexRecid(id), key));
         }
 
         @Override
         public Set<String> getPropertyKeys() {
             Set<String> ret = new HashSet<String>();
-            for(String s:Bind.findVals2(verticesProps.navigableKeySet(), id)){
+            Long recid = vertexRecid(id);
+            for(String s:Bind.findVals2(verticesProps.navigableKeySet(), recid)){
                 ret.add(s);
             }
             return ret;
@@ -142,23 +150,25 @@ public class MapDBGraph implements IndexableGraph,KeyIndexableGraph {
         public void setProperty(String key, Object value) {
             if(key==null||"".equals(key)||"id".equals(key)
                     ||"label".equals(key)) throw new IllegalArgumentException();
-            Object oldVal = verticesProps.put(Fun.t2(id,key),value);
+            Long recid = vertexRecid(id);
+            Object oldVal = verticesProps.put(Fun.t2(recid,key),value);
 
             if(verticesKeys.contains(key)){
                 //remove old value from index if exists
-                if(oldVal!=null) verticesIndex.remove(Fun.t3(key,oldVal,id));
+                if(oldVal!=null) verticesIndex.remove(Fun.t3(key,oldVal,recid));
                 //put new value
-                verticesIndex.add(Fun.t3(key,value,id));
+                verticesIndex.add(Fun.t3(key,value,recid));
             }
         }
 
         @Override
         public <T> T removeProperty(String key) {
-            T ret = (T) verticesProps.remove(Fun.t2(id, key));
+            Long recid = vertexRecid(id);
+            T ret = (T) verticesProps.remove(Fun.t2(recid, key));
             if(verticesKeys.contains(key)){
                 //remove from index
                 //remove old value from index if exists
-                if(ret!=null) verticesIndex.remove(Fun.t3(key,ret,id));
+                if(ret!=null) verticesIndex.remove(Fun.t3(key,ret,recid));
             }
 
             return ret;
@@ -177,24 +187,24 @@ public class MapDBGraph implements IndexableGraph,KeyIndexableGraph {
         @Override
         public void serialize(DataOutput out, MVertex value) throws IOException {
             if(value.id==null) return;
-            Utils.packLong(out,value.id);
+            Serializer.BASIC.serialize(out,value.id);
         }
 
         @Override
         public MVertex deserialize(DataInput in, int available) throws IOException {
             if(available==0) return VERTEX_EMPTY;
-            return new MVertex(Utils.unpackLong(in));
+            return new MVertex(Serializer.BASIC.deserialize(in,available));
         }
     };
 
     protected class MEdge implements Edge{
 
-        protected final Long id;
+        protected final Object id;
         protected final long in,out;
         protected final String label;
 
 
-        public MEdge(Long id, long out, long in,String label) {
+        public MEdge(Object id, long out, long in,String label) {
             this.id = id;
             this.out = out;
             this.in = in;
@@ -221,7 +231,8 @@ public class MapDBGraph implements IndexableGraph,KeyIndexableGraph {
 
         @Override
         public void remove() {
-            if(!edges.contains(id)) throw new IllegalStateException("edge not found");
+            Long recid = edgeRecid(id);
+            if(!edges.contains(recid)) throw new IllegalStateException("edge not found");
 
             Iterator<Map.Entry<Fun.Tuple2<Long,String>,Object>> propsIter =
                     ((NavigableMap)edgesProps).subMap(Fun.t2(id,null),Fun.t2(id,Fun.HI())).entrySet().iterator();
@@ -243,8 +254,8 @@ public class MapDBGraph implements IndexableGraph,KeyIndexableGraph {
                     indexIter.remove();
             }
 
-            engine.delete(id,EDGE_SERIALIZER);
-            edges.remove(id);
+            engine.delete(recid,EDGE_SERIALIZER);
+            edges.remove(recid);
             edges4vertice.remove(Fun.t4(out,true,label,id));
             edges4vertice.remove(Fun.t4(in,false,label,id));
         }
@@ -252,13 +263,14 @@ public class MapDBGraph implements IndexableGraph,KeyIndexableGraph {
 
         @Override
         public <T> T getProperty(String key) {
-            return (T) edgesProps.get(Fun.t2(id, key));
+            return (T) edgesProps.get(Fun.t2(edgeRecid(id), key));
         }
 
         @Override
         public Set<String> getPropertyKeys() {
+            Long recid = edgeRecid(id);
             Set<String> ret = new HashSet<String>();
-            for(String s:Bind.findVals2(edgesProps.navigableKeySet(),id)){
+            for(String s:Bind.findVals2(edgesProps.navigableKeySet(),recid)){
                 ret.add(s);
             }
             return ret;
@@ -268,23 +280,25 @@ public class MapDBGraph implements IndexableGraph,KeyIndexableGraph {
         public void setProperty(String key, Object value) {
             if(key==null||"".equals(key)||"id".equals(key)
                     ||"label".equals(key)) throw new IllegalArgumentException();
-            Object oldVal = edgesProps.put(Fun.t2(id,key),value);
+            Long recid = edgeRecid(id);
+            Object oldVal = edgesProps.put(Fun.t2(recid,key),value);
 
             if(edgesKeys.contains(key)){
                 //remove old value from index if exists
-                if(oldVal!=null) edgesIndex.remove(Fun.t3(key,oldVal,id));
+                if(oldVal!=null) edgesIndex.remove(Fun.t3(key,oldVal,recid));
                 //put new value
-                edgesIndex.add(Fun.t3(key,value,id));
+                edgesIndex.add(Fun.t3(key,value,recid));
             }
         }
 
         @Override
         public <T> T removeProperty(String key) {
-            T ret = (T) edgesProps.remove(Fun.t2(id, key));
+            Long recid = edgeRecid(id);
+            T ret = (T) edgesProps.remove(Fun.t2(recid, key));
             if(edgesKeys.contains(key)){
                 //remove from index
                 //remove old value from index if exists
-                if(ret!=null) edgesIndex.remove(Fun.t3(key,ret,id));
+                if(ret!=null) edgesIndex.remove(Fun.t3(key,ret,recid));
             }
 
             return ret;
@@ -303,7 +317,7 @@ public class MapDBGraph implements IndexableGraph,KeyIndexableGraph {
         @Override
         public void serialize(DataOutput out, MEdge value) throws IOException {
             if(value.id==null) return;
-            Utils.packLong(out,value.id);
+            Serializer.BASIC.serialize(out,value.id);
             Utils.packLong(out,value.out);
             Utils.packLong(out,value.in);
             out.writeUTF(value.getLabel());
@@ -312,20 +326,35 @@ public class MapDBGraph implements IndexableGraph,KeyIndexableGraph {
         @Override
         public MEdge deserialize(DataInput in, int available) throws IOException {
             if(available==0) return EDGE_EMPTY;
-            return new MEdge(Utils.unpackLong(in),Utils.unpackLong(in),Utils.unpackLong(in),in.readUTF());
+            return new MEdge(
+                    Serializer.BASIC.deserialize(in,available),
+                    Utils.unpackLong(in),Utils.unpackLong(in),in.readUTF());
         }
     };
 
     protected final MEdge EDGE_EMPTY = new MEdge(null,0L,0L,null);
 
-    public MapDBGraph(String fileName) {
-        directory = new File(fileName);
-        directory.getParentFile().mkdirs();
-        db = DBMaker.newFileDB(directory)
-                .asyncWriteDisable()
-                //.transactionDisable()
-                .make();
+
+    public MapDBGraph(String fileName, boolean useUserIds) {
+        this( new File(fileName).getParentFile().mkdirs() || true? //always true, but necessary to mkdirts in constructor
+            DBMaker.newFileDB(new File(fileName))
+            .asyncWriteDisable():null
+            //.transactionDisable()
+        ,useUserIds);
+
+    }
+
+    public MapDBGraph(DBMaker dbMaker, boolean useUserIds) {
+        db = dbMaker.make();
         engine = db.getEngine();
+        this.useUserIds= useUserIds;
+
+        vertices2recid = !useUserIds? null:
+                db.createHashMap("vertices2recid").<Object, Long>makeOrGet();
+
+        edges2recid = !useUserIds? null:
+                db.createHashMap("edges2recid").<Object, Long>makeOrGet();
+
 
         vertices =
                 db
@@ -392,15 +421,76 @@ public class MapDBGraph implements IndexableGraph,KeyIndexableGraph {
 
     }
 
-    protected final MVertex VERTEX_EMPTY = new MVertex(null);
 
+    protected Long vertexRecid(Object id){
+        if(useUserIds){
+            Long ret =  vertices2recid.get(id);
+            if(ret == null && id instanceof String){
+                try{
+                    ret = vertices2recid.get(Long.valueOf((String)id));
+                    if(ret==null) ret = vertices2recid.get(Integer.valueOf((String)id));
+                    if(ret==null) ret = vertices2recid.get(Short.valueOf((String)id));
+                    if(ret==null) ret = vertices2recid.get(Double.valueOf((String)id));
+                    if(ret==null) ret = vertices2recid.get(Float.valueOf((String)id));
+                }catch(NumberFormatException e){
+                    return null;
+                }
+            }
+            return ret;
+        }
+        if(id instanceof String)try{
+            return Long.valueOf((String)id);
+        }catch(NumberFormatException e){
+            return null;
+        }
+
+        if(!(id instanceof Long)) return  null;
+        return (Long)id;
+    }
+
+    protected Long edgeRecid(Object id){
+        if(useUserIds){
+            Long ret =  edges2recid.get(id);
+            if(ret == null && id instanceof String){
+                try{
+                    ret = edges2recid.get(Long.valueOf((String)id));
+                    if(ret==null) ret = edges2recid.get(Integer.valueOf((String)id));
+                    if(ret==null) ret = edges2recid.get(Short.valueOf((String)id));
+                    if(ret==null) ret = edges2recid.get(Double.valueOf((String)id));
+                    if(ret==null) ret = edges2recid.get(Float.valueOf((String)id));
+                }catch(NumberFormatException e){
+                    return null;
+                }
+            }
+            return ret;
+        }
+
+        if(id instanceof String)try{
+            return Long.valueOf((String)id);
+        }catch(NumberFormatException e){
+            return null;
+        }
+
+        if(!(id instanceof Long)) return  null;
+        return (Long)id;
+    }
+
+    protected final MVertex VERTEX_EMPTY = new MVertex(null);
 
     @Override
     public Vertex addVertex(Object id) {
         //preallocate recid
         Long recid = engine.put(VERTEX_EMPTY,VERTEX_SERIALIZER);
+
+        if(id==null) id=recid;
+        if(useUserIds){
+            vertices2recid.put(id,recid);
+        }else{
+            id = recid;
+        }
+
         //and insert real value
-        MVertex v = new MVertex(recid);
+        MVertex v = new MVertex(id);
         engine.update(recid, v, VERTEX_SERIALIZER);
         vertices.add(recid);
         return v;
@@ -409,14 +499,10 @@ public class MapDBGraph implements IndexableGraph,KeyIndexableGraph {
     @Override
     public Vertex getVertex(Object id) {
         if(id==null) throw new IllegalArgumentException();
-        if(id instanceof String)try{
-            id = Long.valueOf((String)id);
-        }catch(NumberFormatException e){
-            return null;
-        }
+        Long recid = vertexRecid(id);
 
-        if(!vertices.contains(id))return null;
-        return engine.get((Long)id, VERTEX_SERIALIZER);
+        if(recid==null || !vertices.contains(recid))return null;
+        return engine.get(recid, VERTEX_SERIALIZER);
     }
 
     @Override
@@ -469,7 +555,14 @@ public class MapDBGraph implements IndexableGraph,KeyIndexableGraph {
     @Override
     public Edge addEdge(Object id, Vertex outVertex, Vertex inVertex, String label) {
         Long recid = engine.put(EDGE_EMPTY, EDGE_SERIALIZER);
-        MEdge edge = new MEdge(recid,(Long) outVertex.getId(), (Long) inVertex.getId(),label);
+        if(id==null) id = recid;
+        if(useUserIds){
+            edges2recid.put(id,recid);
+        }else{
+            id = recid;
+        }
+
+        MEdge edge = new MEdge(id,vertexRecid(outVertex.getId()), vertexRecid(inVertex.getId()),label);
         edges.add(recid);
         engine.update(recid,edge,EDGE_SERIALIZER);
         edges4vertice.add(Fun.t4(edge.out,true,label,recid));
@@ -480,14 +573,11 @@ public class MapDBGraph implements IndexableGraph,KeyIndexableGraph {
     @Override
     public Edge getEdge(Object id) {
         if(id==null) throw new IllegalArgumentException();
-        if(id instanceof String)try{
-            id = Long.valueOf((String)id);
-        }catch(NumberFormatException e){
-            return null;
-        }
 
-        if(!edges.contains(id))return null;
-        return engine.get((Long) id,EDGE_SERIALIZER);
+        Long recid = edgeRecid(id);
+
+        if(recid==null || !edges.contains(recid))return null;
+        return engine.get(recid,EDGE_SERIALIZER);
     }
 
     @Override
@@ -610,7 +700,7 @@ public class MapDBGraph implements IndexableGraph,KeyIndexableGraph {
         f.supportsMapProperty = true;
         f.supportsStringProperty = true;
 
-        f.ignoresSuppliedIds = true;
+        f.ignoresSuppliedIds = !useUserIds;
         f.isPersistent = true;
         f.isWrapper = false;
 
@@ -773,7 +863,7 @@ public class MapDBGraph implements IndexableGraph,KeyIndexableGraph {
     public String toString() {
        boolean up = !db.isClosed();
        return StringFactory.graphString(this, "vertices:" + (up?this.vertices.size():"CLOSED") + " edges:" +
-               (up?this.edges.size():"CLOSED") + " directory:" + this.directory);
+               (up?this.edges.size():"CLOSED") + " db:" + this.db);
     }
 
 

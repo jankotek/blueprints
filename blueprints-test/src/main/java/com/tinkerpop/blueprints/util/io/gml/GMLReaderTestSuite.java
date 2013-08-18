@@ -40,15 +40,15 @@ public class GMLReaderTestSuite extends TestSuite {
             assertEquals(marko.getProperty("age"), 29);
             int counter = 0;
             for (Edge e : graph.getVertex("1").getEdges(Direction.OUT)) {
-                if (e.getVertex(Direction.IN).getId().equals("2")) {
+                if (e.getVertex(Direction.IN).getId().toString().equals("2")) {
                     // assertEquals(e.getProperty("weight"), 0.5);
                     assertEquals(e.getLabel(), "knows");
                     counter++;
-                } else if (e.getVertex(Direction.IN).getId().equals("3")) {
+                } else if (e.getVertex(Direction.IN).getId().toString().equals("3")) {
                     assertEquals(0, Math.round(((Number) e.getProperty("weight")).floatValue()));
                     assertEquals(e.getLabel(), "created");
                     counter++;
-                } else if (e.getVertex(Direction.IN).getId().equals("4")) {
+                } else if (e.getVertex(Direction.IN).getId().toString().equals("4")) {
                     assertEquals(1, Math.round(((Number) e.getProperty("weight")).floatValue()));
                     assertEquals(e.getLabel(), "knows");
                     counter++;
@@ -61,11 +61,11 @@ public class GMLReaderTestSuite extends TestSuite {
             assertEquals(josh.getProperty("name"), "josh");
             assertEquals(josh.getProperty("age"), 32);
             for (Edge e : graph.getVertex("4").getEdges(Direction.OUT)) {
-                if (e.getVertex(Direction.IN).getId().equals("3")) {
+                if (e.getVertex(Direction.IN).getId().toString().equals("3")) {
                     assertEquals(0, Math.round(((Number) e.getProperty("weight")).floatValue()));
                     assertEquals(e.getLabel(), "created");
                     counter++;
-                } else if (e.getVertex(Direction.IN).getId().equals("5")) {
+                } else if (e.getVertex(Direction.IN).getId().toString().equals("5")) {
                     assertEquals(1, Math.round(((Number) e.getProperty("weight")).floatValue()));
                     assertEquals(e.getLabel(), "created");
                     counter++;
@@ -305,26 +305,26 @@ public class GMLReaderTestSuite extends TestSuite {
             assertEquals(marko.getProperty("id2"), 2);
             int counter = 0;
             for (Edge e : graph.getVertex(1).getEdges(Direction.OUT)) {
-                if (e.getVertex(Direction.IN).getId().equals("2")) {
+                if (e.getVertex(Direction.IN).getId().toString().equals("2")) {
                     // assertEquals(e.getProperty("weight"), 0.5);
                     assertEquals(e.getProperty("id2"), 8);
                     assertEquals(e.getProperty("label2"), "has high fived");
                     assertEquals(e.getLabel(), "knows");
-                    assertEquals(e.getId(), "7");
+                    assertEquals(e.getId().toString(), "7");
                     counter++;
-                } else if (e.getVertex(Direction.IN).getId().equals("3")) {
+                } else if (e.getVertex(Direction.IN).getId().toString().equals("3")) {
                     assertEquals(0, Math.round(((Number) e.getProperty("weight")).floatValue()));
                     assertEquals(e.getProperty("id2"), 10);
                     assertEquals(e.getProperty("label2"), "has high fived");
                     assertEquals(e.getLabel(), "created");
-                    assertEquals(e.getId(), "9");
+                    assertEquals(e.getId().toString(), "9");
                     counter++;
-                } else if (e.getVertex(Direction.IN).getId().equals("4")) {
+                } else if (e.getVertex(Direction.IN).getId().toString().equals("4")) {
                     assertEquals(1, Math.round(((Number) e.getProperty("weight")).floatValue()));
                     assertEquals(e.getProperty("id2"), 9);
                     assertEquals(e.getProperty("label2"), "has high fived");
                     assertEquals(e.getLabel(), "knows");
-                    assertEquals(e.getId(), "8");
+                    assertEquals(e.getId().toString(), "8");
                     counter++;
                 }
             }
@@ -349,19 +349,19 @@ public class GMLReaderTestSuite extends TestSuite {
             assertEquals(josh.getProperty("name"), "josh");
             assertEquals(josh.getProperty("age"), 32);
             for (Edge e : graph.getVertex(4).getEdges(Direction.OUT)) {
-                if (e.getVertex(Direction.IN).getId().equals("3")) {
+                if (e.getVertex(Direction.IN).getId().toString().equals("3")) {
                     assertEquals(Math.round(((Number) e.getProperty("weight")).floatValue()), 0);
                     assertEquals(e.getProperty("id2"), 13);
                     assertEquals(e.getProperty("label2"), null);
                     assertEquals(e.getLabel(), "created");
-                    assertEquals(e.getId(), "11");
+                    assertEquals(e.getId().toString(), "11");
                     counter++;
-                } else if (e.getVertex(Direction.IN).getId().equals("5")) {
+                } else if (e.getVertex(Direction.IN).getId().toString().equals("5")) {
                     assertEquals(Math.round(((Number) e.getProperty("weight")).floatValue()), 1);
                     assertEquals(e.getProperty("id2"), 11);
                     assertEquals(e.getProperty("label2"), "has high fived");
                     assertEquals(e.getLabel(), "created");
-                    assertEquals(e.getId(), "10");
+                    assertEquals(e.getId().toString(), "10");
                     counter++;
                 }
             }
@@ -380,12 +380,12 @@ public class GMLReaderTestSuite extends TestSuite {
             assertEquals(peter.getProperty("age"), 35);
 
             for (Edge e : graph.getVertex(6).getEdges(Direction.OUT)) {
-                if (e.getVertex(Direction.IN).getId().equals("3")) {
+                if (e.getVertex(Direction.IN).getId().toString().equals("3")) {
                     assertEquals(Math.round((Float) e.getProperty("weight")), 0);
                     assertEquals(e.getProperty("id2"), null);
                     assertEquals(e.getProperty("label2"), null);
                     assertEquals(e.getLabel(), "created");
-                    assertEquals(e.getId(), "12");
+                    assertEquals(e.getId().toString(), "12");
                     counter++;
                 }
             }

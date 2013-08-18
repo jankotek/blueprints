@@ -123,7 +123,7 @@ public class MapDBGraphTest extends GraphTest {
 
     @Override
     public Graph generateGraph(final String graphDirectoryName) {
-        return new MapDBGraph(getDirectory() + "/" + graphDirectoryName);
+        return new MapDBGraph(getDirectory() + "/" + graphDirectoryName,false);
     }
 
     protected String getDirectory() {
