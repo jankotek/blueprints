@@ -8,36 +8,12 @@ import com.tinkerpop.blueprints.util.ElementHelper;
 import com.tinkerpop.blueprints.util.io.gml.GMLReaderTestSuite;
 import com.tinkerpop.blueprints.util.io.graphml.GraphMLReaderTestSuite;
 import com.tinkerpop.blueprints.util.io.graphson.GraphSONReaderTestSuite;
+import org.junit.Test;
 
 import java.io.File;
 import java.lang.reflect.Method;
 import java.util.*;
-
-import com.tinkerpop.blueprints.Direction;
-import com.tinkerpop.blueprints.Edge;
-import com.tinkerpop.blueprints.EdgeTestSuite;
-import com.tinkerpop.blueprints.Graph;
-import com.tinkerpop.blueprints.GraphQueryTestSuite;
-import com.tinkerpop.blueprints.GraphTestSuite;
-import com.tinkerpop.blueprints.Index;
-import com.tinkerpop.blueprints.IndexTestSuite;
-import com.tinkerpop.blueprints.IndexableGraphTestSuite;
-import com.tinkerpop.blueprints.KeyIndexableGraphTestSuite;
-import com.tinkerpop.blueprints.TestSuite;
-import com.tinkerpop.blueprints.Vertex;
-import com.tinkerpop.blueprints.VertexQueryTestSuite;
-import com.tinkerpop.blueprints.VertexTestSuite;
-import com.tinkerpop.blueprints.impls.GraphTest;
-import com.tinkerpop.blueprints.util.ElementHelper;
-import com.tinkerpop.blueprints.util.io.gml.GMLReaderTestSuite;
-import com.tinkerpop.blueprints.util.io.graphml.GraphMLReaderTestSuite;
-import com.tinkerpop.blueprints.util.io.graphson.GraphSONReaderTestSuite;
-import org.mapdb.Engine;
-
-import java.io.File;
-import java.lang.reflect.Method;
-import java.util.Iterator;
-import java.util.UUID;
+import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * @author Marko A. Rodriguez (http://markorodriguez.com)
@@ -116,6 +92,8 @@ public class MapDBGraphTest extends GraphTest {
         printTestPerformance("GMLReaderTestSuite", this.stopWatch());
     }
 
+
+
     @Override
     public Graph generateGraph() {
         return generateGraph("graph");
@@ -123,7 +101,7 @@ public class MapDBGraphTest extends GraphTest {
 
     @Override
     public Graph generateGraph(final String graphDirectoryName) {
-        return new MapDBGraph(getDirectory() + "/" + graphDirectoryName,false);
+        return new MapDBGraph(getDirectory() + "/" + graphDirectoryName, false);
     }
 
     protected String getDirectory() {
@@ -150,7 +128,6 @@ public class MapDBGraphTest extends GraphTest {
             }
         }
     }
-
 
     public void testShutdownStartManyTimes() {
         deleteDirectory(new File(getDirectory()));

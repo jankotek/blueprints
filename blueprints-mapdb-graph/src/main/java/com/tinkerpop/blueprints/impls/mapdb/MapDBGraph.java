@@ -175,10 +175,22 @@ public class MapDBGraph implements IndexableGraph,KeyIndexableGraph {
         }
 
 
-
         @Override
         public Object getId() {
             return id;
+        }
+
+        @Override
+        public int hashCode() {
+            return id.hashCode();
+        }
+
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) return true;
+            if (!(o instanceof MVertex)) return false;
+            if (!id.equals(((MVertex) o).id)) return false;
+            return true;
         }
 
         @Override
@@ -311,13 +323,23 @@ public class MapDBGraph implements IndexableGraph,KeyIndexableGraph {
         }
 
 
-
         @Override
         public Object getId() {
             return id;
         }
 
+        @Override
+        public int hashCode() {
+            return id.hashCode();
+        }
 
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) return true;
+            if (!(o instanceof MEdge)) return false;
+            if (!id.equals(((MEdge) o).id)) return false;
+            return true;
+        }
 
         @Override
         public String toString() {
