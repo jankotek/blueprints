@@ -83,6 +83,8 @@ public class OrientVertex extends OrientElement implements Vertex {
 			final String... iLabels) {
 		graph.setCurrentGraphInThreadLocal();
 
+		OrientBaseGraph.encodeClassNames(iLabels);
+
 		final ODocument doc = getRecord();
 
 		final OMultiCollectionIterator<Vertex> iterable = new OMultiCollectionIterator<Vertex>();
@@ -357,6 +359,9 @@ public class OrientVertex extends OrientElement implements Vertex {
 
 	public long countEdges(final Direction iDirection, final String... iLabels) {
 		long counter = 0;
+
+		OrientBaseGraph.encodeClassNames(iLabels);
+
 		if (graph.isUseVertexFieldsForEdgeLabels() || iLabels == null
 				|| iLabels.length == 0) {
 			// VERY FAST
@@ -391,12 +396,14 @@ public class OrientVertex extends OrientElement implements Vertex {
 		return getEdges(null, iDirection, iLabels);
 	}
 
-	public Iterable<Edge> getEdges(final Vertex iDestination,
+	public Iterable<Edge> getEdges(final OrientVertex iDestination,
 			final Direction iDirection, final String... iLabels) {
 
 		graph.setCurrentGraphInThreadLocal();
 
 		final ODocument doc = getRecord();
+
+		OrientBaseGraph.encodeClassNames(iLabels);
 
 		final OMultiCollectionIterator<Edge> iterable = new OMultiCollectionIterator<Edge>()
 				.setEmbedded(true);
@@ -438,13 +445,15 @@ public class OrientVertex extends OrientElement implements Vertex {
 						// CREATE LAZY Iterable AGAINST COLLECTION FIELD
 						if (coll instanceof ORecordLazyMultiValue) {
 							iterable.add(new OrientEdgeIterator(this,
+									iDestination,
 									((ORecordLazyMultiValue) coll)
 											.rawIterator(), connection,
 									iLabels, ((ORecordLazyMultiValue) coll)
 											.size()));
 						} else
-							iterable.add(new OrientEdgeIterator(this, coll
-									.iterator(), connection, iLabels, -1));
+							iterable.add(new OrientEdgeIterator(this,
+									iDestination, coll.iterator(), connection,
+									iLabels, -1));
 					}
 				}
 			}
@@ -779,6 +788,8 @@ public class OrientVertex extends OrientElement implements Vertex {
 				}
 			}
 
+			iVertex.save();
+
 		} finally {
 			OMVRBTreeRID.getLock().releaseExclusiveLock();
 		}
@@ -877,13 +888,13 @@ public class OrientVertex extends OrientElement implements Vertex {
 			final OMultiCollectionIterator<Edge> iterable, String fieldName,
 			final OPair<Direction, String> connection, final Object fieldValue,
 			final OIdentifiable iTargetVertex, final String[] iLabels) {
-		if (iTargetVertex != null && !iTargetVertex.equals(fieldValue))
-			return;
-
 		final OrientEdge toAdd;
 
 		final ODocument fieldRecord = ((OIdentifiable) fieldValue).getRecord();
 		if (fieldRecord.getSchemaClass().isSubClassOf(CLASS_NAME)) {
+			if (iTargetVertex != null && !iTargetVertex.equals(fieldValue))
+				return;
+
 			// DIRECT VERTEX, CREATE A DUMMY EDGE BETWEEN VERTICES
 			if (connection.getKey() == Direction.OUT)
 				toAdd = new OrientEdge(graph, doc, fieldRecord,
@@ -895,6 +906,14 @@ public class OrientVertex extends OrientElement implements Vertex {
 		} else if (fieldRecord.getSchemaClass().isSubClassOf(
 				OrientEdge.CLASS_NAME)) {
 			// EDGE
+			if (iTargetVertex != null) {
+				Object targetVertex = OrientEdge.getConnection(fieldRecord,
+						connection.getKey().opposite());
+
+				if (!iTargetVertex.equals(targetVertex))
+					return;
+			}
+
 			toAdd = new OrientEdge(graph, fieldRecord);
 		} else
 			throw new IllegalStateException("Invalid content found in "

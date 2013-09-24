@@ -2,11 +2,14 @@ package com.tinkerpop.blueprints.impls.orient;
 
 import java.util.Collection;
 import java.util.Collections;
+import java.util.Date;
+import java.util.Set;
 
 import com.orientechnologies.orient.core.db.record.OIdentifiable;
 import com.orientechnologies.orient.core.sql.query.OSQLSynchQuery;
 import com.tinkerpop.blueprints.Contains;
 import com.tinkerpop.blueprints.Edge;
+import com.tinkerpop.blueprints.Element;
 import com.tinkerpop.blueprints.Graph;
 import com.tinkerpop.blueprints.Query;
 import com.tinkerpop.blueprints.Vertex;
@@ -30,6 +33,7 @@ public class OrientGraphQuery extends DefaultGraphQuery {
 	protected static final String OPERATOR_EQUALS = "=";
 	protected static final String OPERATOR_IS = "is";
 	protected static final String OPERATOR_IN = " in ";
+	protected static final String OPERATOR_LIKE = " like ";	
 
 	protected static final String QUERY_FILTER_AND = " and ";
 	protected static final String QUERY_FILTER_OR = " or ";
@@ -43,10 +47,27 @@ public class OrientGraphQuery extends DefaultGraphQuery {
 	protected static final String QUERY_LABEL_END = "]";
 	protected static final String QUERY_WHERE = " where ";
 	protected static final String QUERY_SELECT_FROM = "select from ";
+	protected static final String SKIP = " SKIP ";	
 	protected static final String LIMIT = " LIMIT ";
+    protected static final String ORDERBY = " ORDER BY ";	
 
 	protected String fetchPlan;
 
+    public int skip = 0;
+    public String orderBy = "";     
+    public String orderByDir = "desc";
+    
+    public class OrientGraphQueryIterable<T extends Element> extends DefaultGraphQueryIterable<T>{
+
+		public OrientGraphQueryIterable(final boolean forVertex) {
+			super(forVertex);
+		}
+		
+        protected Set<String> getIndexedKeys(final Class<? extends Element> elementClass) {
+            return ((OrientBaseGraph) graph).getIndexedKeys(elementClass, true);
+        }
+    }
+    
 	public OrientGraphQuery(final Graph iGraph) {
 		super(iGraph);
 	}
@@ -54,6 +75,22 @@ public class OrientGraphQuery extends DefaultGraphQuery {
 	public Query labels(final String... labels) {
 		this.labels = labels;
 		return this;
+	}
+	
+	public Query skip(int cnt) {
+	    this.skip = cnt;
+	    return this;
+	}
+	
+	public Query order(final String props) {
+	    this.order(props, orderByDir);
+	    return this;
+	}
+	    
+	public Query order(final String props, final String dir) {
+	    this.orderBy = props;
+	    this.orderByDir = dir;
+	    return this;
 	}
 
 	@Override
@@ -63,7 +100,7 @@ public class OrientGraphQuery extends DefaultGraphQuery {
 		
 		if (((OrientBaseGraph) graph).getRawGraph().getTransaction().isActive() )
 			// INSIDE TRANSACTION QUERY DOESN'T SEE IN MEMORY CHANGES, UNTIL SUPPORTED USED THE BASIC IMPL
-			return super.vertices();
+			return new OrientGraphQueryIterable<Vertex>(true);
 
 		final StringBuilder text = new StringBuilder();
 
@@ -78,7 +115,7 @@ public class OrientGraphQuery extends DefaultGraphQuery {
 				text.append(OrientBaseGraph.encodeClassName(labels[0]));
 			else {
 				// MULTIPLE CLASSES NOT SUPPORTED DIRECTLY: CREATE A SUB-QUERY
-				return super.vertices();
+				return new OrientGraphQueryIterable<Vertex>(true);
 			}
 		} else
 			text.append(OrientVertex.CLASS_NAME);
@@ -89,12 +126,22 @@ public class OrientGraphQuery extends DefaultGraphQuery {
 		if (!((OrientBaseGraph) graph).isUseClassForVertexLabel())
 			manageLabels(text);
 
-		if (limit > 0 && limit < Long.MAX_VALUE) {
+        if (orderBy.length()>1)
+        {
+            text.append(ORDERBY);
+			text.append(orderBy);
+            text.append(" "+orderByDir+" ");
+        }
+		if (skip > 0 && skip < Long.MAX_VALUE) {
+			text.append(SKIP);
+			text.append(skip);
+		}
 
+		if (limit > 0 && limit < Long.MAX_VALUE) {
 			text.append(LIMIT);
 			text.append(limit);
-
 		}
+		
 		final OSQLSynchQuery<OIdentifiable> query = new OSQLSynchQuery<OIdentifiable>(
 				text.toString());
 
@@ -112,10 +159,10 @@ public class OrientGraphQuery extends DefaultGraphQuery {
 
 		if (((OrientBaseGraph) graph).getRawGraph().getTransaction().isActive() )
 			// INSIDE TRANSACTION QUERY DOESN'T SEE IN MEMORY CHANGES, UNTIL SUPPORTED USED THE BASIC IMPL
-			return super.edges();
+			return new OrientGraphQueryIterable<Edge>(false);
 
 		if (((OrientBaseGraph) graph).isUseLightweightEdges())
-			return super.edges();
+			return new OrientGraphQueryIterable<Edge>(false);
 
 		final StringBuilder text = new StringBuilder();
 
@@ -130,7 +177,7 @@ public class OrientGraphQuery extends DefaultGraphQuery {
 				text.append(OrientBaseGraph.encodeClassName(labels[0]));
 			else {
 				// MULTIPLE CLASSES NOT SUPPORTED DIRECTLY: CREATE A SUB-QUERY
-				return super.edges();
+				return new OrientGraphQueryIterable<Edge>(false);
 			}
 		} else
 			text.append(OrientEdge.CLASS_NAME);
@@ -193,21 +240,28 @@ public class OrientGraphQuery extends DefaultGraphQuery {
 					text.append(OPERATOR_NOT);
 					text.append(PARENTHESIS_BEGIN);
 				}
-				
-				text.append(has.key);
-				text.append(OPERATOR_IN);
-				text.append(COLLECTION_BEGIN);
+                text.append(has.key);
+                
+			    if (has.value instanceof String) {
+			        text.append(OPERATOR_LIKE);
+                    generateFilterValue(text, has.value);			        
+			    }
+			    else {
+			        text.append(OPERATOR_IN);
+    				text.append(COLLECTION_BEGIN);
 
-				boolean firstItem = true;
-				for (Object o : (Collection<Object>) has.value) {
-					if (!firstItem)
-						text.append(QUERY_SEPARATOR);
-					else
-						firstItem = false;
-					generateFilterValue(text, o);
-				}
+    				boolean firstItem = true;
+    				for (Object o : (Collection<Object>) has.value) {
+    					if (!firstItem)
+    						text.append(QUERY_SEPARATOR);
+    					else
+    						firstItem = false;
+    					generateFilterValue(text, o);
+    				}
 
-				text.append(COLLECTION_END);
+    				text.append(COLLECTION_END);
+			    }
+
 
 				if (has.predicate == Contains.NOT_IN)
 					text.append(PARENTHESIS_END);
@@ -260,7 +314,16 @@ public class OrientGraphQuery extends DefaultGraphQuery {
 			final Object iValue) {
 		if (iValue instanceof String)
 			text.append(QUERY_STRING);
-		text.append(iValue);
+		
+		final Object value;
+		
+		if( iValue instanceof Date )
+			value = ((Date) iValue).getTime();
+		else 
+			value = iValue;
+		
+		text.append(value);
+		
 		if (iValue instanceof String)
 			text.append(QUERY_STRING);
 	}

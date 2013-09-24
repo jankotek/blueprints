@@ -10,6 +10,8 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
+import org.apache.commons.configuration.Configuration;
+
 import com.orientechnologies.common.exception.OException;
 import com.orientechnologies.common.io.OFileUtils;
 import com.orientechnologies.common.log.OLogManager;
@@ -85,7 +87,7 @@ public abstract class OrientBaseGraph implements IndexableGraph,
 	 */
 	public OrientBaseGraph(final ODatabaseDocumentTx iDatabase) {
 		reuse(iDatabase);
-		config();
+		readDatabaseConfiguration();
 	}
 
 	public OrientBaseGraph(final String url) {
@@ -98,11 +100,111 @@ public abstract class OrientBaseGraph implements IndexableGraph,
 		this.username = username;
 		this.password = password;
 		this.openOrCreate();
-		config();
+		readDatabaseConfiguration();
+	}
+
+	/**
+	 * Builds a OrientGraph instance passing a configuration. Supported
+	 * configuration settings are:
+	 * <table>
+	 * <tr>
+	 * <td><b>Name</b></td>
+	 * <td><b>Description</b></td>
+	 * <td><b>Default value</b></td>
+	 * </tr>
+	 * <tr>
+	 * <td>blueprints.orientdb.url</td>
+	 * <td>Database URL</td>
+	 * <td>-</td>
+	 * </tr>
+	 * <tr>
+	 * <td>blueprints.orientdb.username</td>
+	 * <td>User name</td>
+	 * <td>admin</td>
+	 * </tr>
+	 * <tr>
+	 * <td>blueprints.orientdb.password</td>
+	 * <td>User password</td>
+	 * <td>admin</td>
+	 * </tr>
+	 * <tr>
+	 * <td>blueprints.orientdb.saveOriginalIds</td>
+	 * <td>Saves the original element IDs by using the property _id. This could
+	 * be useful on import of graph to preserve original ids</td>
+	 * <td>false</td>
+	 * </tr>
+	 * <tr>
+	 * <td>blueprints.orientdb.keepInMemoryReferences</td>
+	 * <td>Avoid to keep records in memory but only RIDs</td>
+	 * <td>false</td>
+	 * </tr>
+	 * <tr>
+	 * <td>blueprints.orientdb.useCustomClassesForEdges</td>
+	 * <td>Use Edge's label as OrientDB class. If doesn't exist create it under
+	 * the hood</td>
+	 * <td>true</td>
+	 * </tr>
+	 * <tr>
+	 * <td>blueprints.orientdb.useCustomClassesForVertex</td>
+	 * <td>Use Vertex's label as OrientDB class. If doesn't exist create it
+	 * under the hood</td>
+	 * <td>true</td>
+	 * </tr>
+	 * <tr>
+	 * <td>blueprints.orientdb.useVertexFieldsForEdgeLabels</td>
+	 * <td>Store the edge relationships in vertex by using the Edge's class.
+	 * This allow to use multiple fields and make faster traversal by edge's
+	 * label (class)</td>
+	 * <td>true</td>
+	 * </tr>
+	 * <tr>
+	 * <td>blueprints.orientdb.lightweightEdges</td>
+	 * <td>Uses lightweight edges. This avoid to create a physical document per
+	 * edge. Documents are created only when they have properties</td>
+	 * <td>true</td>
+	 * </tr>
+	 * </table>
+	 * 
+	 * @param configuration
+	 */
+	public OrientBaseGraph(final Configuration configuration) {
+		this(configuration.getString("blueprints.orientdb.url", null),
+				configuration.getString("blueprints.orientdb.username", null),
+				configuration.getString("blueprints.orientdb.password", null));
+
+		final Boolean saveOriginalIds = configuration.getBoolean(
+				"blueprints.orientdb.saveOriginalIds", null);
+		if (saveOriginalIds != null)
+			setSaveOriginalIds(saveOriginalIds);
+
+		final Boolean keepInMemoryReferences = configuration.getBoolean(
+				"blueprints.orientdb.keepInMemoryReferences", null);
+		if (keepInMemoryReferences != null)
+			setKeepInMemoryReferences(keepInMemoryReferences);
+
+		final Boolean useCustomClassesForEdges = configuration.getBoolean(
+				"blueprints.orientdb.useCustomClassesForEdges", null);
+		if (useCustomClassesForEdges != null)
+			setUseClassForEdgeLabel(useCustomClassesForEdges);
+
+		final Boolean useCustomClassesForVertex = configuration.getBoolean(
+				"blueprints.orientdb.useCustomClassesForVertex", null);
+		if (useCustomClassesForVertex != null)
+			setUseClassForVertexLabel(useCustomClassesForVertex);
+
+		final Boolean useVertexFieldsForEdgeLabels = configuration.getBoolean(
+				"blueprints.orientdb.useVertexFieldsForEdgeLabels", null);
+		if (useVertexFieldsForEdgeLabels != null)
+			setUseVertexFieldsForEdgeLabels(useVertexFieldsForEdgeLabels);
+
+		final Boolean lightweightEdges = configuration.getBoolean(
+				"blueprints.orientdb.lightweightEdges", null);
+		if (lightweightEdges != null)
+			setUseLightweightEdges(lightweightEdges);
 	}
 
 	@SuppressWarnings("unchecked")
-	private void config() {
+	private void readDatabaseConfiguration() {
 		final List<OStorageEntryConfiguration> custom = (List<OStorageEntryConfiguration>) getRawGraph()
 				.get(ATTRIBUTES.CUSTOM);
 		for (OStorageEntryConfiguration c : custom) {
@@ -423,7 +525,7 @@ public abstract class OrientBaseGraph implements IndexableGraph,
 		if (idx != null) {
 			iValue = convertKey(idx, iValue);
 
-			Object indexValue = (Iterable<?>) idx.get(iValue);
+			Object indexValue = idx.get(iValue);
 			if (indexValue != null && !(indexValue instanceof Iterable<?>))
 				indexValue = Arrays.asList(indexValue);
 
@@ -835,6 +937,9 @@ public abstract class OrientBaseGraph implements IndexableGraph,
 
 	public <T extends Element> void dropKeyIndex(final String key,
 			final Class<T> elementClass) {
+		if (elementClass == null)
+			throw ExceptionFactory.classForElementCannotBeNull();
+
 		executeOutsideTx(new OCallable<OClass, OrientBaseGraph>() {
 			@Override
 			public OClass call(final OrientBaseGraph g) {
@@ -872,6 +977,9 @@ public abstract class OrientBaseGraph implements IndexableGraph,
 	@SuppressWarnings({ "rawtypes" })
 	public <T extends Element> void createKeyIndex(final String key,
 			final Class<T> elementClass, final Parameter... indexParameters) {
+		if (elementClass == null)
+			throw ExceptionFactory.classForElementCannotBeNull();
+
 		executeOutsideTx(new OCallable<OClass, OrientBaseGraph>() {
 			@Override
 			public OClass call(final OrientBaseGraph g) {
@@ -921,6 +1029,14 @@ public abstract class OrientBaseGraph implements IndexableGraph,
 
 	public <T extends Element> Set<String> getIndexedKeys(
 			final Class<T> elementClass) {
+		return getIndexedKeys(elementClass, false);
+	}
+
+	public <T extends Element> Set<String> getIndexedKeys(
+			final Class<T> elementClass, final boolean includeClassNames) {
+		if (elementClass == null)
+			throw ExceptionFactory.classForElementCannotBeNull();
+
 		final OSchema schema = getRawGraph().getMetadata().getSchema();
 		final String elementOClassName = getClassName(elementClass);
 
@@ -933,8 +1049,12 @@ public abstract class OrientBaseGraph implements IndexableGraph,
 			if (point > 0) {
 				String oClassName = indexName.substring(0, point);
 				OClass oClass = schema.getClass(oClassName);
-				if (oClass.isSubClassOf(elementOClassName))
-					result.add(index.getDefinition().getFields().get(0));
+				if (oClass.isSubClassOf(elementOClassName)) {
+					if (includeClassNames)
+						result.add(index.getName());
+					else
+						result.add(index.getDefinition().getFields().get(0));
+				}
 			}
 		}
 		return result;
@@ -1034,6 +1154,13 @@ public abstract class OrientBaseGraph implements IndexableGraph,
 	public void setUseVertexFieldsForEdgeLabels(
 			final boolean useVertexFieldsForEdgeLabels) {
 		this.useVertexFieldsForEdgeLabels = useVertexFieldsForEdgeLabels;
+	}
+
+	public static void encodeClassNames(final String... iLabels) {
+		if (iLabels != null)
+			// ENCODE LABELS
+			for (int i = 0; i < iLabels.length; ++i)
+				iLabels[i] = encodeClassName(iLabels[i]);
 	}
 
 	public static String encodeClassName(String iClassName) {
