@@ -73,6 +73,7 @@ public class MapDBGraphTest extends GraphTest {
 
     public void testShutdownStartManyTimes() {
         // Setup
+        deleteDirectory(new File(getDirectory()));
         Graph graph = generateGraph();
 
         // Action
