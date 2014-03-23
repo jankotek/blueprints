@@ -4,6 +4,7 @@ import com.tinkerpop.blueprints.Direction;
 import com.tinkerpop.blueprints.Edge;
 import com.tinkerpop.blueprints.Graph;
 import com.tinkerpop.blueprints.Vertex;
+import com.tinkerpop.blueprints.VertexQuery;
 import com.tinkerpop.blueprints.impls.tg.TinkerGraph;
 import org.codehaus.jettison.json.JSONArray;
 import org.codehaus.jettison.json.JSONException;
@@ -695,6 +696,60 @@ public class GraphSONUtilityTest {
     }
 
     @Test
+    public void jsonFromElementVertexListPropertiesEmbeddedMapNoKeysWithTypes() throws JSONException {
+        Vertex v = this.graph.addVertex(1);
+        Map<String, Object> map = new HashMap<String, Object>();
+        map.put("x", 500);
+        map.put("y", "some");
+        map.put("z", 100f);
+
+        ArrayList friends = new ArrayList();
+        friends.add("x");
+        friends.add(5);
+        friends.add(map);
+        friends.add(100000f);
+
+        v.setProperty("friends", friends);
+
+        JSONObject json = GraphSONUtility.jsonFromElement(v, null, GraphSONMode.EXTENDED);
+
+        Assert.assertNotNull(json);
+        Assert.assertTrue(json.has(GraphSONTokens._ID));
+        Assert.assertEquals(1, json.optInt(GraphSONTokens._ID));
+        Assert.assertTrue(json.has("friends"));
+
+        JSONObject friendsProperty = json.optJSONObject("friends");
+        Assert.assertEquals("list", friendsProperty.getString("type"));
+
+        JSONArray friendPropertyList = friendsProperty.getJSONArray("value");
+        JSONObject object1 = friendPropertyList.getJSONObject(0);
+        Assert.assertEquals("string", object1.getString("type"));
+        Assert.assertEquals("x", object1.getString("value"));
+
+        JSONObject object2 = friendPropertyList.getJSONObject(1);
+        Assert.assertEquals("integer", object2.getString("type"));
+        Assert.assertEquals(5, object2.getInt("value"));
+
+        JSONObject object3 = friendPropertyList.getJSONObject(2);
+        Assert.assertEquals("map", object3.getString("type"));
+        JSONObject object3Value = object3.getJSONObject("value");
+        JSONObject object3ValueY = object3Value.getJSONObject("y");
+        Assert.assertEquals("string", object3ValueY.getString("type"));
+        Assert.assertEquals("some", object3ValueY.getString("value"));
+        JSONObject object3ValueX = object3Value.getJSONObject("x");
+        Assert.assertEquals("integer", object3ValueX.getString("type"));
+        Assert.assertEquals(500, object3ValueX.getInt("value"));
+        JSONObject object3ValueZ = object3Value.getJSONObject("z");
+        Assert.assertEquals("float", object3ValueZ.getString("type"));
+        Assert.assertEquals(100f, new Float(object3ValueZ.getDouble("value")), 0.0001f);
+
+        JSONObject object4 = friendPropertyList.getJSONObject(3);
+        Assert.assertEquals("float", object4.getString("type"));
+        Assert.assertEquals(100000f, new Float(object4.getDouble("value")), 0.0001f);
+
+    }
+
+    @Test
     public void jsonFromElementVertexBooleanListPropertiesNoKeysWithTypes() throws JSONException {
         Vertex v = this.graph.addVertex(1);
         List<Boolean> list = new ArrayList<Boolean>();
@@ -880,15 +935,42 @@ public class GraphSONUtilityTest {
         Assert.assertEquals(GraphSONTokens.TYPE_INTEGER, thatAsJson.optString(GraphSONTokens.TYPE));
         Assert.assertTrue(thatAsJson.has(GraphSONTokens.VALUE));
         Assert.assertEquals(1, thatAsJson.optInt(GraphSONTokens.VALUE));
+    }
 
+    /**
+     * This test is kinda weird since a Blueprints graph can't have properties set to null, howerver that does not
+     * mean that a graph may never return null (https://github.com/tinkerpop/blueprints/issues/400).
+     */
+    @Test
+    public void jsonFromElementInTheOddCasePropertyReturnsNullNoKeysWithTypes() throws Exception {
+        final Vertex v = new VertexThatReturnsNull();
+        final JSONObject json = GraphSONUtility.jsonFromElement(v, null, GraphSONMode.EXTENDED);
 
+        Assert.assertNotNull(json);
+        Assert.assertTrue(json.has(GraphSONTokens._ID));
+        Assert.assertEquals(1234l, json.optLong(GraphSONTokens._ID));
+        Assert.assertFalse(json.has("alwaysNull"));
+    }
+
+    /**
+     * This test is kinda weird since a Blueprints graph can't have properties set to null, howerver that does not
+     * mean that a graph may never return null (https://github.com/tinkerpop/blueprints/issues/400).
+     */
+    @Test
+    public void jsonFromElementInTheOddCasePropertyReturnsNullNoKeysNoTypes() throws Exception {
+        final Vertex v = new VertexThatReturnsNull();
+        final JSONObject json = GraphSONUtility.jsonFromElement(v, null, GraphSONMode.NORMAL);
+
+        Assert.assertNotNull(json);
+        Assert.assertTrue(json.has(GraphSONTokens._ID));
+        Assert.assertEquals(1234l, json.optLong(GraphSONTokens._ID));
+        Assert.assertFalse(json.has("alwaysNull"));
     }
 
     @Test
     public void jsonFromElementNullsNoKeysNoTypes() throws JSONException {
         Graph g = new TinkerGraph();
         Vertex v = g.addVertex(1);
-        //v.setProperty("key", null);
 
         Map<String, Object> map = new HashMap<String, Object>();
         map.put("innerkey", null);
@@ -1035,7 +1117,7 @@ public class GraphSONUtilityTest {
 
         Set<String> ignoreAge = new HashSet<String>();
         ignoreAge.add("age");
-        ElementPropertyConfig config = ElementPropertyConfig.ExcludeProperties(ignoreAge, null);
+        ElementPropertyConfig config = ElementPropertyConfig.excludeProperties(ignoreAge, null);
         GraphSONUtility utility = new GraphSONUtility(GraphSONMode.NORMAL, factory, config);
         Vertex v = utility.vertexFromJson(new JSONObject(new JSONTokener(vertexJson1)));
 
@@ -1099,7 +1181,7 @@ public class GraphSONUtilityTest {
 
         Set<String> ignoreWeight = new HashSet<String>();
         ignoreWeight.add("weight");
-        ElementPropertyConfig config = ElementPropertyConfig.ExcludeProperties(null, ignoreWeight);
+        ElementPropertyConfig config = ElementPropertyConfig.excludeProperties(null, ignoreWeight);
         GraphSONUtility utility = new GraphSONUtility(GraphSONMode.NORMAL, factory, config);
         Edge e = utility.edgeFromJson(new JSONObject(new JSONTokener(edgeJson)), v1, v2);
 
@@ -1181,6 +1263,59 @@ public class GraphSONUtilityTest {
         @Override
         public String toString() {
             return this.name;
+        }
+    }
+
+    private class VertexThatReturnsNull implements Vertex {
+        @Override
+        public Iterable<Edge> getEdges(Direction direction, String... labels) {
+            return null;
+        }
+
+        @Override
+        public Iterable<Vertex> getVertices(Direction direction, String... labels) {
+            return null;
+        }
+
+        @Override
+        public VertexQuery query() {
+            return null;
+        }
+
+        @Override
+        public Edge addEdge(String label, Vertex inVertex) {
+            return null;
+        }
+
+        @Override
+        public <T> T getProperty(String key) {
+            return null;
+        }
+
+        @Override
+        public Set<String> getPropertyKeys() {
+            return new HashSet<String>() {{
+                add("alwaysNull");
+            }};
+        }
+
+        @Override
+        public void setProperty(String key, Object value) {
+
+        }
+
+        @Override
+        public <T> T removeProperty(String key) {
+            return null;
+        }
+
+        @Override
+        public void remove() {
+        }
+
+        @Override
+        public Object getId() {
+            return 1234l;
         }
     }
 }

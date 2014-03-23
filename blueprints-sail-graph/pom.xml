@@ -38,20 +38,53 @@
             <artifactId>sesame-sail-nativerdf</artifactId>
             <version>${sesame.version}</version>
         </dependency>
+        <!-- note: the LinkedDataSail dependency also includes RDF writers and parsers -->
         <dependency>
             <groupId>net.fortytwo</groupId>
             <artifactId>linked-data-sail</artifactId>
             <version>${ripple.version}</version>
-        </dependency>
-        <dependency>
-            <groupId>net.fortytwo.sesametools</groupId>
-            <artifactId>nquads</artifactId>
-            <version>${sesametools.version}</version>
+            <exclusions>
+                <!-- conflict with blueprints-core -->
+                <exclusion>
+                    <groupId>com.fasterxml.jackson.core</groupId>
+                    <artifactId>jackson-core</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>com.fasterxml.jackson.core</groupId>
+                    <artifactId>jackson-databind</artifactId>
+                </exclusion>
+                <!-- conflict with Sesame -->
+                <exclusion>
+                    <groupId>commons-codec</groupId>
+                    <artifactId>commons-codec</artifactId>
+                </exclusion>
+                <!-- temporary; latest Ripple no longer has its own slf4j dependency -->
+                <exclusion>
+                    <groupId>org.slf4j</groupId>
+                    <artifactId>slf4j-api</artifactId>
+                </exclusion>
+                <!-- temporary; latest Ripple resolves these two conflicts -->
+                <exclusion>
+                    <groupId>org.openrdf.sesame</groupId>
+                    <artifactId>sesame-model</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.openrdf.sesame</groupId>
+                    <artifactId>sesame-rio-api</artifactId>
+                </exclusion>
+            </exclusions>
         </dependency>
         <dependency>
             <groupId>net.fortytwo.sesametools</groupId>
             <artifactId>repository-sail</artifactId>
             <version>${sesametools.version}</version>
+            <exclusions>
+                <!-- temporary; latest Ripple no longer has its own slf4j dependency -->
+                <exclusion>
+                    <groupId>org.slf4j</groupId>
+                    <artifactId>slf4j-api</artifactId>
+                </exclusion>
+            </exclusions>
         </dependency>
         <!-- TESTING -->
         <dependency>

@@ -21,6 +21,13 @@
             <groupId>net.fortytwo.sesametools</groupId>
             <artifactId>common</artifactId>
             <version>${sesametools.version}</version>
+            <exclusions>
+                <!-- temporary; latest SesameTools does not have its own slf4j dependency -->
+                <exclusion>
+                    <groupId>org.slf4j</groupId>
+                    <artifactId>slf4j-api</artifactId>
+                </exclusion>
+            </exclusions>
         </dependency>
         <dependency>
             <groupId>org.openrdf.sesame</groupId>
@@ -35,6 +42,16 @@
         <dependency>
             <groupId>org.openrdf.sesame</groupId>
             <artifactId>sesame-queryalgebra-evaluation</artifactId>
+            <version>${sesame.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.openrdf.sesame</groupId>
+            <artifactId>sesame-model</artifactId>
+            <version>${sesame.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.openrdf.sesame</groupId>
+            <artifactId>sesame-util</artifactId>
             <version>${sesame.version}</version>
         </dependency>
         <dependency>
@@ -84,6 +101,13 @@
             <artifactId>blueprints-neo4j-graph</artifactId>
             <version>${blueprints.version}</version>
             <scope>test</scope>
+            <exclusions>
+                <!-- conflict with Sesame -->
+                <exclusion>
+                    <groupId>org.slf4j</groupId>
+                    <artifactId>slf4j-api</artifactId>
+                </exclusion>
+            </exclusions>
         </dependency>
         <dependency>
             <groupId>com.tinkerpop.blueprints</groupId>
