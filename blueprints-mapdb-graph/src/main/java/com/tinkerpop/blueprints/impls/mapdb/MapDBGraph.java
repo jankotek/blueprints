@@ -29,6 +29,7 @@ public class MapDBGraph implements IndexableGraph,KeyIndexableGraph {
 
     protected final NavigableMap<Fun.Tuple2<Long,String>,Object> verticesProps;
     protected final NavigableMap<Fun.Tuple2<Long,String>,Object> edgesProps;
+    protected final NavigableSet<Fun.Tuple2<String,Long>> edgesLabels;
 
     protected final NavigableSet<Fun.Tuple3<String,Object,Long>> verticesIndex;
     protected final NavigableSet<Fun.Tuple3<String,Object,Long>> edgesIndex;
@@ -410,8 +411,12 @@ public class MapDBGraph implements IndexableGraph,KeyIndexableGraph {
                 .serializer(BTreeKeySerializer.ZERO_OR_POSITIVE_LONG)
                 .makeOrGet();
 
-        edges4vertice = db
-                .createTreeSet("edges4vertice")
+        edgesLabels = db.createTreeSet("edgesLabels")
+                .serializer(BTreeKeySerializer.TUPLE2)
+                .makeOrGet();
+
+
+        edges4vertice = db.createTreeSet("edges4vertice")
                 .serializer(BTreeKeySerializer.TUPLE4)
                 .makeOrGet();
 
@@ -607,6 +612,7 @@ public class MapDBGraph implements IndexableGraph,KeyIndexableGraph {
         engine.update(recid,edge,EDGE_SERIALIZER);
         edges4vertice.add(Fun.t4(edge.out,true,label,recid));
         edges4vertice.add(Fun.t4(edge.in,false,label,recid));
+        edgesLabels.add(Fun.t2(label, recid));
         return edge;
     }
 
@@ -686,7 +692,14 @@ public class MapDBGraph implements IndexableGraph,KeyIndexableGraph {
     @Override
     public Iterable<Edge> getEdges(final String key, final Object value) {
 
-        return new Iterable<Edge>() {
+        if ("label".equals(key)) return new Iterable<Edge>() {
+            @Override
+            public Iterator<Edge> iterator() {
+                return new MEdgeRecidIterator(Fun.filter(edgesLabels, (String) value).iterator());
+            }
+        };
+
+        else return new Iterable<Edge>() {
             @Override
             public Iterator<Edge> iterator() {
 
