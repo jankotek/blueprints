@@ -16,7 +16,7 @@
     <properties>
         <javac.src.version>1.6</javac.src.version>
         <javac.target.version>1.6</javac.target.version>
-        <mapdb.version>0.9.5-SNAPSHOT</mapdb.version>
+        <mapdb.version>0.9.10</mapdb.version>
     </properties>
 
     <repositories>

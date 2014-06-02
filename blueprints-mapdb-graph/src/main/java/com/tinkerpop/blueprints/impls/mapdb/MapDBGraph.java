@@ -29,6 +29,7 @@ public class MapDBGraph implements IndexableGraph,KeyIndexableGraph {
 
     protected final NavigableMap<Fun.Tuple2<Long,String>,Object> verticesProps;
     protected final NavigableMap<Fun.Tuple2<Long,String>,Object> edgesProps;
+    protected final NavigableSet<Fun.Tuple2<String,Long>> edgesLabels;
 
     protected final NavigableSet<Fun.Tuple3<String,Object,Long>> verticesIndex;
     protected final NavigableSet<Fun.Tuple3<String,Object,Long>> edgesIndex;
@@ -65,14 +66,14 @@ public class MapDBGraph implements IndexableGraph,KeyIndexableGraph {
             for(String label:labels){
 
                 if(Direction.BOTH == direction){
-                    for(Long recid2 : Bind.findVals4( edges4vertice, recid, true, label)){
+                    for(Long recid2 : Fun.filter( edges4vertice, recid, true, label)){
                         ret.add(engine.get(recid2,EDGE_SERIALIZER));
                     }
-                    for(Long recid2 : Bind.findVals4( edges4vertice, recid, false, label)){
+                    for(Long recid2 : Fun.filter( edges4vertice, recid, false, label)){
                         ret.add(engine.get(recid2,EDGE_SERIALIZER));
                     }
                 }else{
-                    for(Long recid2 : Bind.findVals4( edges4vertice, recid, direction == Direction.OUT, label)){
+                    for(Long recid2 : Fun.filter( edges4vertice, recid, direction == Direction.OUT, label)){
                         ret.add(engine.get(recid2,EDGE_SERIALIZER));
                     }
                 }
@@ -140,7 +141,7 @@ public class MapDBGraph implements IndexableGraph,KeyIndexableGraph {
         public Set<String> getPropertyKeys() {
             Set<String> ret = new HashSet<String>();
             Long recid = vertexRecid(id);
-            for(String s:Bind.findVals2(verticesProps.navigableKeySet(), recid)){
+            for(String s:Fun.filter(verticesProps.navigableKeySet(), recid)){
                 ret.add(s);
             }
             return ret;
@@ -212,6 +213,11 @@ public class MapDBGraph implements IndexableGraph,KeyIndexableGraph {
         public MVertex deserialize(DataInput in, int available) throws IOException {
             if(available==0) return VERTEX_EMPTY;
             return new MVertex(Serializer.BASIC.deserialize(in,available));
+        }
+
+        @Override
+        public int fixedSize() {
+            return -1;
         }
     };
 
@@ -288,7 +294,7 @@ public class MapDBGraph implements IndexableGraph,KeyIndexableGraph {
         public Set<String> getPropertyKeys() {
             Long recid = edgeRecid(id);
             Set<String> ret = new HashSet<String>();
-            for(String s:Bind.findVals2(edgesProps.navigableKeySet(),recid)){
+            for(String s:Fun.filter(edgesProps.navigableKeySet(),recid)){
                 ret.add(s);
             }
             return ret;
@@ -353,8 +359,8 @@ public class MapDBGraph implements IndexableGraph,KeyIndexableGraph {
         public void serialize(DataOutput out, MEdge value) throws IOException {
             if(value.id==null) return;
             Serializer.BASIC.serialize(out,value.id);
-            Utils.packLong(out,value.out);
-            Utils.packLong(out,value.in);
+            DataOutput2.packLong(out,value.out);
+            DataOutput2.packLong(out,value.in);
             out.writeUTF(value.getLabel());
         }
 
@@ -363,7 +369,12 @@ public class MapDBGraph implements IndexableGraph,KeyIndexableGraph {
             if(available==0) return EDGE_EMPTY;
             return new MEdge(
                     Serializer.BASIC.deserialize(in,available),
-                    Utils.unpackLong(in),Utils.unpackLong(in),in.readUTF());
+                    DataInput2.unpackLong(in),DataInput2.unpackLong(in),in.readUTF());
+        }
+
+        @Override
+        public int fixedSize() {
+            return -1;
         }
     };
 
@@ -372,8 +383,7 @@ public class MapDBGraph implements IndexableGraph,KeyIndexableGraph {
 
     public MapDBGraph(String fileName, boolean useUserIds) {
         this( new File(fileName).getParentFile().mkdirs() || true? //always true, but necessary to mkdirts in constructor
-            DBMaker.newFileDB(new File(fileName))
-            .asyncWriteDisable():null
+            DBMaker.newFileDB(new File(fileName)) :null
             //.transactionDisable()
         ,useUserIds);
 
@@ -391,33 +401,33 @@ public class MapDBGraph implements IndexableGraph,KeyIndexableGraph {
                 db.createHashMap("edges2recid").<Object, Long>makeOrGet();
 
 
-        vertices =
-                db
-                .createTreeSet("vertices")
-                .keepCounter(true)
+        vertices = db.createTreeSet("vertices")
+                .counterEnable()
                 .serializer(BTreeKeySerializer.ZERO_OR_POSITIVE_LONG)
                 .makeOrGet();
 
-
-        edges = db
-                .createTreeSet("edges")
-                .keepCounter(true)
+        edges = db.createTreeSet("edges")
+                .counterEnable()
                 .serializer(BTreeKeySerializer.ZERO_OR_POSITIVE_LONG)
                 .makeOrGet();
 
-        edges4vertice = db
-                .createTreeSet("edges4vertice")
+        edgesLabels = db.createTreeSet("edgesLabels")
+                .serializer(BTreeKeySerializer.TUPLE2)
+                .makeOrGet();
+
+
+        edges4vertice = db.createTreeSet("edges4vertice")
                 .serializer(BTreeKeySerializer.TUPLE4)
                 .makeOrGet();
 
         edgesProps = db.createTreeMap("edgesProps")
                 .keySerializer(BTreeKeySerializer.TUPLE2)
-                .valuesStoredOutsideNodes(true)
+                .valuesOutsideNodesEnable()
                 .makeOrGet();
 
         verticesProps = db.createTreeMap("verticesProps")
                 .keySerializer(BTreeKeySerializer.TUPLE2)
-                .valuesStoredOutsideNodes(true)
+                .valuesOutsideNodesEnable()
                 .makeOrGet();
 
 
@@ -578,7 +588,7 @@ public class MapDBGraph implements IndexableGraph,KeyIndexableGraph {
                 }
 
                 final Iterator<Long> i = indexed?
-                        Bind.findVals3(verticesIndex,key,value).iterator():longs.iterator();
+                        Fun.filter(verticesIndex,key,value).iterator():longs.iterator();
 
 
                 return new MVertexRecidIterator(i);
@@ -602,6 +612,7 @@ public class MapDBGraph implements IndexableGraph,KeyIndexableGraph {
         engine.update(recid,edge,EDGE_SERIALIZER);
         edges4vertice.add(Fun.t4(edge.out,true,label,recid));
         edges4vertice.add(Fun.t4(edge.in,false,label,recid));
+        edgesLabels.add(Fun.t2(label, recid));
         return edge;
     }
 
@@ -681,7 +692,14 @@ public class MapDBGraph implements IndexableGraph,KeyIndexableGraph {
     @Override
     public Iterable<Edge> getEdges(final String key, final Object value) {
 
-        return new Iterable<Edge>() {
+        if ("label".equals(key)) return new Iterable<Edge>() {
+            @Override
+            public Iterator<Edge> iterator() {
+                return new MEdgeRecidIterator(Fun.filter(edgesLabels, (String) value).iterator());
+            }
+        };
+
+        else return new Iterable<Edge>() {
             @Override
             public Iterator<Edge> iterator() {
 
@@ -699,7 +717,7 @@ public class MapDBGraph implements IndexableGraph,KeyIndexableGraph {
                 }
 
                  Iterator<Long> i= indexed?
-                        Bind.findVals3(edgesIndex,key,value).iterator():longs.iterator();
+                        Fun.filter(edgesIndex,key,value).iterator():longs.iterator();
 
                 return new MEdgeRecidIterator(i);
             }
@@ -828,7 +846,7 @@ public class MapDBGraph implements IndexableGraph,KeyIndexableGraph {
 
                 @Override
                 public Iterator<T> iterator() {
-                    Iterator<Long> iter = Bind.findVals4(isVertex?verticesIndex2:edgesIndex2,indexName,key,value).iterator();
+                    Iterator<Long> iter = Fun.filter(isVertex?verticesIndex2:edgesIndex2,indexName,key,value).iterator();
                     return (Iterator<T>) (isVertex?new MVertexRecidIterator(iter):new MEdgeRecidIterator(iter));
                 }
             };

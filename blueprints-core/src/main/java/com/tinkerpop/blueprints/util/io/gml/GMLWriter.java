@@ -24,7 +24,7 @@ import java.util.regex.Pattern;
 
 /**
  * GMLWriter writes a Graph to a GML OutputStream.
- * <p/>
+ *
  * GML definition taken from
  * (http://www.fim.uni-passau.de/fileadmin/files/lehrstuhl/brandenburg/projekte/gml/gml-documentation.tar.gz)
  *
@@ -132,8 +132,8 @@ public class GMLWriter {
 
         writeGraph(writer, vertices, edges);
 
+        // just flush, don't close...allow the underlying stream to stay open and let the calling function close it
         writer.flush();
-        writer.close();
     }
 
     private void writeGraph(final Writer writer, final List<Vertex> vertices, final List<Edge> edges) throws IOException {

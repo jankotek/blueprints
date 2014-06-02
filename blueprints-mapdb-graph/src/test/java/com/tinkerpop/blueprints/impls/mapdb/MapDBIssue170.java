@@ -6,9 +6,7 @@ import com.tinkerpop.blueprints.Vertex;
 import org.junit.Before;
 import org.junit.Test;
 import org.mapdb.DBMaker;
-import org.mapdb.Utils;
 
-import java.io.File;
 import java.util.UUID;
 
 import static org.junit.Assert.assertFalse;
@@ -19,9 +17,7 @@ public class MapDBIssue170 {
 
     @Before
     public void setUp() {
-        File dbFile = Utils.tempDbFile();
-        DBMaker dbMaker = DBMaker.newFileDB(dbFile)
-                .asyncWriteDisable()
+        DBMaker dbMaker = DBMaker.newTempFileDB()
                 .transactionDisable()
                 .compressionEnable() // This causes troubles
                 .deleteFilesAfterClose()
